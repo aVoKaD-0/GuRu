@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/navigation_theory"
+        android:icon="@drawable/ic_theory"
+        android:title="Теория" />
+
+    <item
+        android:id="@+id/navigation_tasks"
+        android:icon="@drawable/ic_tasks"
+        android:title="Задачи" />
+
+    <item
+        android:id="@+id/navigation_cheatsheets"
+        android:icon="@drawable/ic_cheatsheets"
+        android:title="Шпаргалки" />
+
+    <item
+        android:id="@+id/navigation_variants"
+        android:icon="@drawable/ic_variants"
+        android:title="Варианты" />
+</menu> 

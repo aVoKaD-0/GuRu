@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "28825475540",
+    "project_id": "ruege-dea8b",
+    "storage_bucket": "ruege-dea8b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:28825475540:android:e01db5bcb493f6d07e9e41",
+        "android_client_info": {
+          "package_name": "com.ruege.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "28825475540-qkcpiir0hr7sjiivcoccq09fvtooi7po.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ruege.mobile",
+            "certificate_hash": "84b9c71352a3475d9bef07dcaf5e6c3e066f4985"
+          }
+        },
+        {
+          "client_id": "28825475540-u711faoggpf5q3ir18k1ie5q2lig19fk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ruege.mobile",
+            "certificate_hash": "244ea8fb2d9b915bf2e1cd63e4cd6dc7ab88d50d"
+          }
+        },
+        {
+          "client_id": "28825475540-avqj2corn2eq81aq0248cbdh0qds5sl9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjOZA3SZkGpQ3yTjIKtBCvhXifbGRuSdw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "28825475540-avqj2corn2eq81aq0248cbdh0qds5sl9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="?attr/colorSurface">
+
+    <!-- Контейнер для дополнительного текста -->
+    <LinearLayout
+        android:id="@+id/additional_text_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="visible"> <!-- Изначально видим, чтобы textToggleContainer управлял им -->
+
+        <!-- Индикатор загрузки дополнительного текста -->
+        <ProgressBar
+            android:id="@+id/task_additional_text_loading"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- TextView для отображения ошибки загрузки дополнительного текста -->
+        <TextView
+            android:id="@+id/task_additional_text_error"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/holo_red_dark"
+            android:visibility="gone"
+            android:gravity="center_horizontal"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- TextView для отображения дополнительного текста задания -->
+        <TextView
+            android:id="@+id/task_additional_text_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="15sp" 
+            android:textColor="?android:attr/textColorSecondary"
+            android:visibility="gone"
+            android:background="@drawable/rounded_corner_background_subtle" 
+            android:padding="12dp"
+            android:layout_marginBottom="16dp"/>
+    </LinearLayout>
+    
+    <!-- Текст задания (для обычного текста) -->
+    <TextView
+        android:id="@+id/task_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Разделитель -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/dividerHorizontal"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Поле для ввода ответа -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Ваш ответ:"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="?android:attr/textColorPrimary"
+        android:layout_marginBottom="8dp"/>
+
+    <EditText
+        android:id="@+id/answer_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Введите ответ здесь"
+        android:padding="12dp"
+        style="?attr/editTextStyle"
+        android:textColor="?android:attr/editTextColor"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Кнопка отправки ответа -->
+    <Button
+        style="@style/Widget.MaterialComponents.Button"
+        android:id="@+id/submit_answer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Отправить ответ"
+        android:textSize="14sp"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Блок с результатом проверки (изначально скрыт) -->
+    <LinearLayout
+        android:id="@+id/result_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginTop="8dp">
+
+        <!-- Статус проверки (верно/неверно) -->
+        <TextView
+            android:id="@+id/result_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingVertical="8dp"
+            android:layout_marginBottom="8dp"/>
+        
+        <!-- Короткая информация о результате -->
+        <TextView
+            android:id="@+id/result_short_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:layout_marginBottom="8dp"/>
+            
+        <!-- Кнопка для просмотра полного объяснения -->
+        <Button
+            android:id="@+id/show_explanation_button"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Подробнее"
+            android:textSize="14sp"/>
+            
+        <!-- Полное объяснение (изначально скрыто) -->
+        <TextView
+            android:id="@+id/result_explanation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:visibility="gone"
+            android:layout_marginTop="8dp"/>
+    </LinearLayout>
+
+</LinearLayout> 

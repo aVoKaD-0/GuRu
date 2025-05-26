@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Общий индикатор загрузки, виден при первой загрузке деталей варианта -->
+    <ProgressBar
+        android:id="@+id/pb_variant_detail_loading"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        tools:visibility="visible"/>
+
+    <!-- Контейнер для первоначальной инструкции -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/sv_instructions_area"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:visibility="visible">
+
+        <LinearLayout
+            android:id="@+id/ll_instructions_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tv_instruction_title_main"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Единый государственный экзамен по РУССКОМУ ЯЗЫКУ"
+                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:gravity="center_horizontal"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tv_instruction_title_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Инструкция по выполнению работы"
+                android:textAppearance="?attr/textAppearanceSubtitle1"
+                android:gravity="center_horizontal"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tv_instruction_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceBody2"
+                android:lineSpacingMultiplier="1.2"
+                android:text="@string/variant_execution_instruction"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tv_instruction_wish"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Желаем успеха!"
+                android:textAppearance="?attr/textAppearanceSubtitle1"
+                android:textStyle="bold"
+                android:gravity="center_horizontal"
+                android:layout_marginBottom="24dp"/>
+
+            <Button
+                android:id="@+id/btn_acknowledge_instructions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Я прочитал(а) и готов(а) начать" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Контейнер для решения варианта (изначально скрыт) -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/nsv_variant_solving_area"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:visibility="gone"
+        tools:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/ll_variant_content_wrapper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="48dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp">
+
+            <TextView
+                android:id="@+id/tv_variant_name_bs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                tools:text="Название варианта"
+                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tv_variant_description_bs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                tools:text="Описание варианта, если есть."
+                android:textAppearance="?attr/textAppearanceBody2"
+                android:layout_marginBottom="16dp"/>
+            
+            <!-- Динамический контент (задания и тексты) будет здесь -->
+            <LinearLayout
+                android:id="@+id/ll_dynamic_content_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"/>
+
+            <Button
+                android:id="@+id/btn_finish_variant"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Завершить вариант" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Таймер, привязан к верхней части экрана, но виден только с ll_variant_solving_area -->
+    <TextView
+        android:id="@+id/tv_timer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        tools:text="03:55:00"
+        android:textAppearance="?attr/textAppearanceHeadline6"
+        android:textColor="?android:attr/textColorPrimary"
+        android:background="@drawable/timer_background"
+        android:padding="8dp"
+        android:visibility="gone" 
+        tools:visibility="visible"/>
+</FrameLayout> 

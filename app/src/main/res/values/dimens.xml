@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Стандартные отступы Material Design -->
+    <dimen name="spacing_tiny">4dp</dimen>
+    <dimen name="spacing_small">4dp</dimen>
+    <dimen name="spacing_medium">8dp</dimen>
+    <dimen name="spacing_large">16dp</dimen>
+    <dimen name="spacing_xlarge">24dp</dimen>
+    <dimen name="spacing_xxlarge">32dp</dimen>
+
+    <!-- Размеры иконок -->
+    <dimen name="icon_size_small">24dp</dimen>
+    <dimen name="icon_size_medium">32dp</dimen>
+    <dimen name="icon_size_large">40dp</dimen>
+    <dimen name="icon_size_xlarge">48dp</dimen>
+    <dimen name="profile_avatar_size">80dp</dimen>
+
+    <!-- Скругления -->
+    <dimen name="corner_radius_medium">16dp</dimen>
+
+    <!-- Высота элементов -->
+    <dimen name="toolbar_height">?attr/actionBarSize</dimen>
+    <dimen name="divider_height">1dp</dimen>
+    <dimen name="divider_height_medium">15dp</dimen>
+    
+    <!-- Отступ для BottomSheet -->
+    <dimen name="bottom_sheet_offset">64dp</dimen>
+    
+    <!-- Elevation -->
+    <dimen name="elevation_small">4dp</dimen>
+    <dimen name="elevation_medium">8dp</dimen>
+
+    <!-- Размеры текста -->
+    <dimen name="text_size_caption">12sp</dimen>
+    <dimen name="text_size_body">14sp</dimen>
+    <dimen name="text_size_subhead">16sp</dimen>
+    <dimen name="text_size_title">18sp</dimen>
+    <dimen name="text_size_headline">20sp</dimen>
+
+    <dimen name="user_avatar_size_toolbar">32dp</dimen>
+    <dimen name="user_avatar_size_profile">80dp</dimen>
+
+    <!-- Spacing -->
+    <dimen name="spacing_xsmall">4dp</dimen>
+
+    <!-- Placeholder text heights -->
+    <dimen name="placeholder_text_height_small">12dp</dimen>
+    <dimen name="placeholder_text_height_medium">16dp</dimen>
+    <dimen name="placeholder_text_height_large">20dp</dimen>
+</resources> 

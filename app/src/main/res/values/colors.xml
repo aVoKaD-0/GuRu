@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="grey_100">#F5F5F5</color>
+    <color name="grey_500">#9E9E9E</color>
+    <color name="grey_700">#616161</color>
+    
+    
+    <color name="tab_text_selected">@color/white</color>
+    <color name="tab_text_unselected">#757575</color>
+    <color name="tab_background">@color/white</color>
+    
+    
+    <color name="primary">#6200EE</color>
+"
+    <color name="primary_dark">#3700B3</color>
+<!--    <color name="primary_light">#BB86FC</color>-->
+    <color name="secondary">#03DAC6</color>
+    <color name="secondary_dark">#018786</color>
+    <color name="accent">#FF4081</color>
+    <color name="solved_task_yellow">#FFEB3B</color>
+
+    <!-- Для совместимости с fragment_practice_statistics.xml -->
+    <color name="colorPrimary">@color/primary</color>
+    <color name="colorOnPrimary">@color/white</color>
+    <color name="background">@color/background_light</color>
+    
+    <color name="background_light">#FAFAFA</color>
+    <color name="background_dark">#121212</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="surface_dark">#222222</color>
+    
+    
+    <color name="text_primary">#212121</color>
+<!--    <color name="text_secondary">#757575</color>-->
+    <color name="text_hint">#9E9E9E</color>
+    
+    
+    <color name="text_primary_dark">#FFFFFF</color>
+    <color name="text_secondary_dark">#B3FFFFFF</color>
+    <color name="text_hint_dark">#80FFFFFF</color>
+    
+    
+    <color name="success">#4CAF50</color>
+    <color name="error">#F44336</color>
+    <color name="warning">#FF9800</color>
+    <color name="info">#2196F3</color>
+    
+    
+    <color name="divider_light">#1F000000</color>
+    <color name="divider_dark">#1FFFFFFF</color>
+    
+    
+    <color name="card_background_light">#FFFFFF</color>
+    <color name="card_background_dark">#272727</color>
+    
+    
+    <color name="ripple_light">#1F000000</color>
+    <color name="ripple_dark">#1FFFFFFF</color>
+    
+    
+    <color name="tab_text_selected_dark">@color/primary_light</color>
+    <color name="tab_text_unselected_dark">@color/text_secondary_dark</color>
+
+    <color name="placeholder_background">#DDDDDD</color>
+    <color name="placeholder_background_dark">#444444</color>
+    
+    <!-- Цвета для заданий -->
+    <color name="correct_answer">#4CAF50</color>
+    <color name="incorrect_answer">#F44336</color>
+
+    <!-- Цвета для карточек прогресса -->
+    <color name="card_background">#FFFFFF</color>
+    <color name="border_light">#E0E0E0</color>
+    <color name="primary_light">#E3F2FD</color>
+    <color name="text_secondary">#757575</color>
+    
+    <!-- Дополнительные цвета для темной темы карточек прогресса -->
+    <color name="progress_card_background_dark">#1D1D1D</color>
+    <color name="progress_primary_background_dark">#1A3F5F</color>
+    <color name="border_dark">#444444</color>
+
+    <color name="shimmer_color">#C2C2C2</color>
+    <color name="shimmer_background_color">#DDDDDD</color>
+    <color name="placeholder_bg">#E0E0E0</color>
+
+    <color name="bottom_sheet_handle_color">#BDBDBD</color>
+
+    <color name="grey_300">#E0E0E0</color>
+
+    <!-- Цвета для результатов проверки -->
+    <color name="correct_answer_green">#4CAF50</color>
+    <color name="incorrect_answer_red">#F44336</color>
+    <color name="show_answer_link_color">@color/colorPrimary</color>
+
+    <color name="correct_answer_background_light">#E8F5E9</color>
+    <color name="incorrect_answer_background_light">#FFEBEE</color>
+    <color name="solution_explanation_background_light">#ECEFF1</color>
+
+    <color name="colorPrimaryText">#DE000000</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="on_surface">#000000</color>
+    <color name="on_error">#000000</color>
+
+    <color name="md_theme_light_tertiary">#6200EE</color> 
+    <color name="md_theme_light_error">#B00020</color>
+
+</resources>

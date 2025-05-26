@@ -1,0 +1,491 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <!-- Основной контент -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/content_main"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- Верхняя панель -->
+        <RelativeLayout
+            android:id="@+id/top_panel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="@dimen/spacing_medium"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <!-- Кнопка темы -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/theme_toggle"
+                android:layout_width="@dimen/icon_size_xlarge"
+                android:layout_height="@dimen/icon_size_xlarge"
+                android:layout_marginStart="@dimen/spacing_small"
+                android:layout_centerVertical="true"
+                android:contentDescription="Переключить тему приложения"
+                app:icon="@drawable/ic_lantern_off"
+                app:iconSize="@dimen/icon_size_large"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="@null"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:backgroundTint="@android:color/transparent"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full"
+                style="@style/Widget.Material3.Button.IconButton"/>
+
+            <!-- Аватар пользователя -->
+            <ImageView
+                android:id="@+id/user_avatar"
+                android:layout_width="@dimen/icon_size_xlarge"
+                android:layout_height="@dimen/icon_size_xlarge"
+                android:layout_alignParentEnd="true"
+                android:background="@drawable/circle_background"
+                android:contentDescription="Профиль пользователя"
+                android:src="@drawable/ic_profile"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="@dimen/spacing_tiny" />
+        </RelativeLayout>
+
+        <!-- Прокручиваемый контент -->
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scroll_content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="@dimen/spacing_small"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/top_panel">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Шиммер для прогресса -->
+                <com.facebook.shimmer.ShimmerFrameLayout
+                    android:id="@+id/shimmer_progress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_small"
+                    app:shimmer_auto_start="false">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:paddingStart="@dimen/spacing_tiny"
+                        android:paddingEnd="@dimen/spacing_tiny">
+                        <!-- Плейсхолдер для прогресса -->
+                        <include layout="@layout/item_progress_placeholder" />
+                    </LinearLayout>
+                </com.facebook.shimmer.ShimmerFrameLayout>
+
+                <!-- RecyclerView для прогресса -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler_progress"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipToPadding="false"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/spacing_tiny"
+                    android:paddingEnd="@dimen/spacing_tiny"
+                    android:visibility="gone"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+                <!-- Плейсхолдер ошибки для прогресса -->
+                <LinearLayout
+                    android:id="@+id/error_placeholder_progress"
+                    android:layout_width="match_parent"
+                    android:layout_height="92dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="@dimen/spacing_small"
+                    android:layout_marginStart="@dimen/spacing_medium"
+                    android:layout_marginEnd="@dimen/spacing_medium"
+                    android:padding="@dimen/spacing_medium"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="@dimen/icon_size_medium"
+                        android:layout_height="@dimen/icon_size_medium"
+                        android:src="@drawable/ic_sentiment_dissatisfied"
+                        android:contentDescription="Грустный смайлик"
+                        app:tint="?android:attr/textColorSecondary"
+                        android:layout_marginEnd="@dimen/spacing_small"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Проверьте подключение к интернету и\nсовершите попытку позже."
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="@dimen/text_size_body"
+                        android:gravity="center_horizontal"/>
+                </LinearLayout>
+
+                 <!-- Шиммер для новостей -->
+                 <com.facebook.shimmer.ShimmerFrameLayout
+                     android:id="@+id/shimmer_news"
+                     android:layout_width="match_parent"
+                     android:layout_height="wrap_content"
+                     android:layout_marginTop="@dimen/spacing_medium"
+                     app:shimmer_auto_start="false">
+
+                     <LinearLayout
+                         android:layout_width="match_parent"
+                         android:layout_height="wrap_content"
+                         android:orientation="horizontal"
+                         android:paddingStart="@dimen/spacing_tiny"
+                         android:paddingEnd="@dimen/spacing_tiny">
+                         <!-- Плейсхолдер для новостей -->
+                         <include layout="@layout/item_news_placeholder" />
+                     </LinearLayout>
+                 </com.facebook.shimmer.ShimmerFrameLayout>
+
+                <!-- RecyclerView для новостей -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler_news"
+                    android:layout_width="match_parent"
+                    android:layout_height="100dp"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:clipToPadding="false"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/spacing_tiny"
+                    android:paddingEnd="@dimen/spacing_tiny"
+                    android:visibility="gone"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+                <!-- Плейсхолдер ошибки для новостей -->
+                <LinearLayout
+                    android:id="@+id/error_placeholder_news"
+                    android:layout_width="match_parent"
+                    android:layout_height="100dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:layout_marginStart="@dimen/spacing_medium"
+                    android:layout_marginEnd="@dimen/spacing_medium"
+                    android:padding="@dimen/spacing_medium"
+                    android:visibility="gone">
+
+                     <ImageView
+                         android:layout_width="@dimen/icon_size_medium"
+                         android:layout_height="@dimen/icon_size_medium"
+                         android:src="@drawable/ic_sentiment_dissatisfied"
+                         android:contentDescription="Грустный смайлик"
+                         app:tint="?android:attr/textColorSecondary"
+                         android:layout_marginEnd="@dimen/spacing_small"/>
+
+                     <TextView
+                         android:layout_width="wrap_content"
+                         android:layout_height="wrap_content"
+                         android:text="Проверьте подключение к интернету и\nсовершите попытку позже."
+                         android:textColor="?android:attr/textColorSecondary"
+                         android:textSize="@dimen/text_size_body"
+                         android:gravity="center_horizontal"/>
+                </LinearLayout>
+
+                <!-- Навигация по разделам (вкладки) -->
+                <com.google.android.material.tabs.TabLayout
+                    android:id="@+id/tab_navigation"
+                    style="@style/CustomTabLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:contentDescription="Навигация по разделам приложения"
+                    android:elevation="5dp"
+                    app:tabMode="scrollable" />
+
+                <!-- Контейнер для контента и шиммера -->
+
+                <!-- Контейнер для фрагментов (добавлено) -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="@dimen/spacing_small"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:minHeight="150dp">
+
+                    <!-- Шиммер для Контента (уровень 1) -->
+                    <com.facebook.shimmer.ShimmerFrameLayout
+                        android:id="@+id/shimmer_content"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:elevation="1dp"
+                        app:shimmer_auto_start="false">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+                            <!-- Плейсхолдер для контента -->
+                            <include layout="@layout/item_content_placeholder" />
+                        </LinearLayout>
+                    </com.facebook.shimmer.ShimmerFrameLayout>
+
+                    <!-- Контент категорий (уровень 2) -->
+                    <FrameLayout
+                        android:id="@+id/content_container"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:elevation="2dp"
+                        android:minHeight="150dp"
+                        android:paddingBottom="@dimen/spacing_medium"
+                        android:visibility="gone"></FrameLayout>
+
+                    <!-- Плейсхолдер ошибки для Контента (уровень 3 - наивысший) -->
+                    <LinearLayout
+                        android:id="@+id/error_placeholder_content"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/colorSurface"
+                        android:elevation="3dp"
+                        android:gravity="center"
+                        android:minHeight="150dp"
+                        android:orientation="vertical"
+                        android:padding="@dimen/spacing_medium"
+                        android:visibility="gone">
+
+                        <ImageView
+                            android:layout_width="@dimen/icon_size_xlarge"
+                            android:layout_height="@dimen/icon_size_xlarge"
+                            android:layout_marginBottom="@dimen/spacing_medium"
+                            android:contentDescription="Грустный смайлик"
+                            android:src="@drawable/ic_sentiment_dissatisfied"
+                            app:tint="?android:attr/textColorSecondary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/spacing_small"
+                            android:gravity="center"
+                            android:text="Нет подключения к интернету"
+                            android:textColor="?android:attr/textColorPrimary"
+                            android:textSize="@dimen/text_size_subhead"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:text="Проверьте соединение и\nповторите попытку позже."
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="@dimen/text_size_body" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/fragment_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="400dp"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:layout_marginBottom="@dimen/spacing_medium"/>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Затемняющий слой -->
+    <View
+        android:id="@+id/dim_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        android:alpha="0"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"/>
+
+    <!-- Профиль пользователя - выезжающая снизу панель -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/user_profile_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/rounded_top_background"
+        android:elevation="@dimen/elevation_medium"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="0dp"
+        app:behavior_fitToContents="true"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+        <!-- Заголовок профиля с кнопкой закрытия -->
+        <RelativeLayout
+            android:id="@+id/profile_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="@dimen/spacing_medium"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/close_profile"
+                android:layout_width="@dimen/icon_size_small"
+                android:layout_height="@dimen/icon_size_small"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:contentDescription="Закрыть профиль"
+                android:src="@drawable/ic_close" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:text="Профиль"
+                android:textSize="@dimen/text_size_title"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textStyle="bold" />
+        </RelativeLayout>
+
+        <!-- Включаем содержимое профиля из отдельного файла макета -->
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            app:layout_constraintTop_toBottomOf="@+id/profile_header"
+            app:layout_constraintBottom_toBottomOf="parent">
+            
+            <include layout="@layout/layout_profile_content" />
+            
+        </androidx.core.widget.NestedScrollView>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Детали контента - выезжающая снизу панель -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/content_details_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/rounded_top_background"
+        android:elevation="@dimen/elevation_medium"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="0dp"
+        app:behavior_fitToContents="true"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
+
+        <!-- Заголовок панели деталей с кнопкой закрытия -->
+        <RelativeLayout
+            android:id="@+id/panel_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="@dimen/spacing_medium"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <ImageView
+                android:id="@+id/close_panel"
+                android:layout_width="@dimen/icon_size_small"
+                android:layout_height="@dimen/icon_size_small"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:contentDescription="Закрыть"
+                android:src="@drawable/ic_close" />
+
+            <TextView
+                android:id="@+id/panel_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:text="Детали"
+                android:textSize="@dimen/text_size_title"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textStyle="bold" />
+        </RelativeLayout>
+
+        <!-- Содержимое панели деталей -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:clipToPadding="false"
+            android:paddingBottom="@dimen/spacing_medium"
+            app:layout_constraintTop_toBottomOf="@+id/panel_header"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <LinearLayout
+                android:id="@+id/panel_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_medium">
+
+                <!-- Заголовок контента -->
+                <TextView
+                    android:id="@+id/content_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/text_size_headline"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="@dimen/spacing_small" />
+
+                <!-- Описание контента -->
+                <TextView
+                    android:id="@+id/content_description"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/text_size_subhead"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginBottom="@dimen/spacing_medium" />
+                
+                <!-- Разделитель -->
+                <View
+                    android:id="@+id/content_divider"
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:layout_marginBottom="@dimen/spacing_medium"
+                    android:background="?android:attr/listDivider" />
+                
+                <!-- Индикатор загрузки -->
+                <ProgressBar
+                    android:id="@+id/content_loading"
+                    style="?android:attr/progressBarStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:visibility="gone" />
+                
+                <!-- Сообщение об ошибке -->
+                <TextView
+                    android:id="@+id/content_error"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@android:color/holo_red_dark"
+                    android:textSize="@dimen/text_size_body"
+                    android:visibility="gone" />
+                
+                <!-- WebView для отображения HTML-контента -->
+                <WebView
+                    android:id="@+id/content_web_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="500dp"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:visibility="gone" />
+                
+                <!-- FrameLayout для размещения заданий -->
+                <FrameLayout
+                    android:id="@+id/task_sheet_host_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_marginTop="@dimen/spacing_medium"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+        </ScrollView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
