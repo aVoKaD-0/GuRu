@@ -36,7 +36,7 @@ interface UserVariantTaskAnswerDao {
     suspend fun deleteAnswersForVariant(variantId: Int)
 
     @Query("DELETE FROM user_variant_task_answers")
-    suspend fun clearAllAnswers() // Для служебных целей
+    suspend fun clearAllAnswers() 
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertUserAnswer(answer: UserVariantTaskAnswerEntity)

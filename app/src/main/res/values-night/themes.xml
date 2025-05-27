@@ -23,6 +23,7 @@
         <!-- Атрибуты для плейсхолдеров -->
         <item name="placeholderBackground">@color/placeholder_background_dark</item>
         <item name="colorSurfaceVariant">@color/card_background_dark</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.App.BottomSheetDialog</item>
     </style>
     
     
@@ -64,5 +65,14 @@
         <item name="tabPaddingTop">8dp</item>
         <item name="tabPaddingBottom">8dp</item>
         <item name="tabUnboundedRipple">false</item>
+    </style>
+
+    <style name="ThemeOverlay.App.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="android:background">?attr/colorSurface</item>
+        <item name="bottomSheetStyle">@style/Widget.App.BottomSheet</item>
+    </style>
+
+    <style name="Widget.App.BottomSheet" parent="Widget.Material3.BottomSheet">
+        <item name="android:background">?attr/colorSurface</item>
     </style>
 </resources>

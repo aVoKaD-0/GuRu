@@ -27,16 +27,13 @@ class AuthInterceptor @Inject constructor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
         
-        // Если это запрос на аутентификацию, просто пропускаем его
         if (isAuthRequest(originalRequest.url.encodedPath)) {
             return chain.proceed(originalRequest)
         }
 
-        // Проверяем, не истек ли токен доступа
         if (tokenManager.isAccessTokenExpired(bufferSeconds = 30) && !isAuthRequest(originalRequest.url.encodedPath)) {
             Log.d(TAG, "Токен доступа скоро истечет, проактивно обновляем")
             
-            // Пытаемся обновить токен
             val refreshToken = tokenManager.getRefreshToken()
             if (refreshToken != null) {
                 synchronized(this) {
@@ -65,10 +62,8 @@ class AuthInterceptor @Inject constructor(
             }
         }
 
-        // Получаем актуальный токен доступа (возможно, обновленный)
         val accessToken = tokenManager.getAccessToken()
 
-        // Добавляем заголовок, если токен есть
         val requestBuilder = originalRequest.newBuilder()
         if (accessToken != null) {
             requestBuilder.header("Authorization", "Bearer $accessToken")
@@ -78,13 +73,8 @@ class AuthInterceptor @Inject constructor(
         return chain.proceed(request)
     }
 
-    /**
-     * Проверяет, является ли запрос запросом на аутентификацию/обновление токена,
-     * для которых не нужно добавлять заголовок Authorization.
-     */
+
     private fun isAuthRequest(path: String): Boolean {
-        // Сравниваем с путями эндпоинтов, не требующих токена
         return path.endsWith("/auth/google") || path.endsWith("/auth/refresh") || path.endsWith("/auth/login")
-        // Добавьте сюда другие пути, если они есть
     }
 } 

@@ -24,7 +24,7 @@ data class UserAnswerResponseItemDto(
     @Json(name = "order_position")
     val orderPosition: Int,
     @Json(name = "created_at")
-    val createdAt: String, // Обычно дата приходит как String, потом парсится если нужно
+    val createdAt: String, 
     @Json(name = "updated_at")
     val updatedAt: String
 ) 

@@ -46,7 +46,6 @@ public class TaskEntity {
     @ColumnInfo(name = "task_type")
     private String taskType;
 
-    // Конструктор для Room
     public TaskEntity(@NonNull Integer id, @Nullable String fipiId, @NonNull String egeNumber,
                       @Nullable String taskText, @Nullable String solution, @Nullable String explanation,
                       @Nullable String source, @Nullable Integer textId, @NonNull String taskType) {
@@ -61,7 +60,6 @@ public class TaskEntity {
         this.taskType = taskType;
     }
 
-    // --- Геттеры ---
     @NonNull
     public Integer getId() {
         return id;
@@ -107,7 +105,6 @@ public class TaskEntity {
         return taskType;
     }
 
-    // --- Сеттеры ---
     public void setId(@NonNull Integer id) {
         this.id = id;
     }
@@ -146,9 +143,8 @@ public class TaskEntity {
 
     public com.ruege.mobile.model.TaskItem toTaskItem() {
         String currentContent = this.taskText != null ? this.taskText : "";
-        String currentDescription = ""; // Описание пока оставим пустым
+        String currentDescription = ""; 
 
-        // Определяем тип ответа на основе taskType
         com.ruege.mobile.model.AnswerType answerType;
         switch (this.taskType) {
             case "SINGLE_CHOICE":
@@ -169,17 +165,17 @@ public class TaskEntity {
             currentDescription, 
             currentContent,     
             answerType,          
-            1,                        // maxPoints - всегда 1 для практики
-            0,                        // timeLimit - не используется в практике
-            null,                     // List<Solution> - для текстовых заданий обычно null
-            this.solution,            
+            1,                        
+            0,                        
+            null,                     
+            this.solution,           
             this.explanation,
             this.textId,
-            null,                     // userAnswer
-            false,                    // isSolved
-            null,                     // isCorrect
-            null,                     // scoreAchieved
-            0                         // attemptsMade
+            null,                     
+            false,                    
+            null,                     
+            null,                     
+            0                         
         );
     }
 } 

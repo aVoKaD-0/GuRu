@@ -20,10 +20,10 @@
         
         <item name="android:colorBackground">@color/white</item>
         <item name="android:windowBackground">@color/white</item>
-        
-        <!-- Атрибуты для плейсхолдеров -->
+
         <item name="placeholderBackground">@color/placeholder_background</item>
         <item name="colorSurfaceVariant">@color/card_background_light</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.App.BottomSheetDialog</item>
     </style>
     
     <style name="Theme.Mobile" parent="Base.Theme.Mobile">
@@ -76,4 +76,13 @@
 
     
     <style name="Theme.Mobile.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+
+    <style name="ThemeOverlay.App.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="android:background">?attr/colorSurface</item>
+        <item name="bottomSheetStyle">@style/Widget.App.BottomSheet</item>
+    </style>
+
+    <style name="Widget.App.BottomSheet" parent="Widget.Material3.BottomSheet">
+        <item name="android:background">?attr/colorSurface</item>
+    </style>
 </resources>

@@ -16,9 +16,6 @@ data class EssaySummaryDto(
     @Json(name = "type") val type: String? = null,
     @Json(name = "content_id") val contentId: String? = null
 ) {
-    /**
-     * Конвертирует DTO в ContentEntity для сохранения в БД.
-     */
     fun toContentEntity(): ContentEntity {
         try {
             val safeType = type?.takeIf { it.isNotBlank() } ?: "essay" // Тип "essay"

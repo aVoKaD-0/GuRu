@@ -5,10 +5,9 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class PracticeAttemptItemUiModel(
-    val attemptId: Long, // ID самой попытки, может пригодиться
-    val taskId: Int,     // ID задачи
-    val egeTaskNumberDisplay: String, // Например, "Задание 5" или "Задача ID: X" если egeNumber нет
+    val attemptId: Long, 
+    val taskId: Int,     
+    val egeTaskNumberDisplay: String, 
     val attemptDateFormatted: String,
     val isCorrect: Boolean
-    // Можно добавить поле для детального текста задания или ответа пользователя, если нужно
 ) : Parcelable 

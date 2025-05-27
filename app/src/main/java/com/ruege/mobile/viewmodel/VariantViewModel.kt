@@ -75,6 +75,16 @@ class VariantViewModel @Inject constructor(
             .launchIn(viewModelScope) // Запускаем Flow в viewModelScope
     }
 
+    // Метод для сброса состояния деталей варианта, чтобы предотвратить повторное открытие BottomSheet
+    fun consumeVariantDetails() {
+        _variantDetailsState.value = Resource.Loading() // Сбрасываем в состояние загрузки или можно в Success(null)
+        // Также можно сбросить связанные данные, если они не должны оставаться после закрытия BS
+        // _sharedTextsState.value = Resource.Success(emptyList())
+        // _tasksState.value = Resource.Success(emptyList())
+        // _userAnswersForCurrentVariantLiveData.value = Resource.Loading() // или Resource.Success(emptyMap())
+        Log.d("ViewModel", "consumeVariantDetails: Variant details state has been reset.")
+    }
+
     // Метод для загрузки деталей конкретного варианта
     fun fetchVariantDetails(variantId: Int) {
         viewModelScope.launch {

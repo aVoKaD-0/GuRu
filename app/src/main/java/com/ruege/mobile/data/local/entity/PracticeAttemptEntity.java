@@ -36,7 +36,6 @@ public class PracticeAttemptEntity {
     @ColumnInfo(name = "attempt_date")
     private long attemptDate;
 
-    // Конструкторы
     public PracticeAttemptEntity() {
     }
 
@@ -47,7 +46,6 @@ public class PracticeAttemptEntity {
         this.attemptDate = attemptDate;
     }
 
-    // Геттеры
     public long getAttemptId() {
         return attemptId;
     }
@@ -64,7 +62,6 @@ public class PracticeAttemptEntity {
         return attemptDate;
     }
 
-    // Сеттеры
     public void setAttemptId(long attemptId) {
         this.attemptId = attemptId;
     }

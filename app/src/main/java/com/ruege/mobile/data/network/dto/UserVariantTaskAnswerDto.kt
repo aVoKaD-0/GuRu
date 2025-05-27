@@ -5,7 +5,7 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class UserVariantTaskAnswerDto(
-    @Json(name = "variant_task_option_id") // Это PK самого ответа на сервере
+    @Json(name = "variant_task_option_id")
     val variantTaskOptionId: Int,
 
     @Json(name = "variant_task_id")
@@ -14,10 +14,10 @@ data class UserVariantTaskAnswerDto(
     @Json(name = "variant_id")
     val variantId: Int,
 
-    @Json(name = "user_id") // ID пользователя, который дал ответ (с сервера)
+    @Json(name = "user_id") 
     val userId: Int,
 
-    @Json(name = "user_submitted_answer") // Это алиас для option_text на сервере
+    @Json(name = "user_submitted_answer") 
     val userSubmittedAnswer: String,
 
     @Json(name = "is_correct")
@@ -26,12 +26,12 @@ data class UserVariantTaskAnswerDto(
     @Json(name = "explanation")
     val explanation: String?,
 
-    @Json(name = "order_position") // Используется для маппинга в points_awarded
+    @Json(name = "order_position") 
     val orderPosition: Int,
 
     @Json(name = "created_at")
     val createdAt: String,
 
-    @Json(name = "updated_at") // Используется для маппинга в answered_timestamp
+    @Json(name = "updated_at") 
     val updatedAt: String
 )

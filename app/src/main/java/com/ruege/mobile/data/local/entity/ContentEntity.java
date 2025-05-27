@@ -82,7 +82,6 @@ public class ContentEntity {
         this.contentUrl = contentUrl;
     }
 
-    // Фабричный метод для создания ContentEntity из Kotlin
     @Ignore
     public static ContentEntity createForKotlin(String contentId, String title, String description, 
                                          String type, String parentId, boolean isDownloaded, 

@@ -33,8 +33,8 @@ data class VariantSharedTextEntity(
     val sourceDescription: String,
 
     @ColumnInfo(name = "created_at")
-    val createdAt: String, // ISO 8601
+    val createdAt: String, 
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: String // ISO 8601
+    val updatedAt: String
 ) 

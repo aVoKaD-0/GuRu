@@ -22,9 +22,4 @@ data class VariantListItemDto(
 
     @Json(name = "created_at")
     val createdAt: String,
-    
-    // Поле updated_at отсутствует в списке, но есть в VariantEntity.
-    // Если оно может приходить от сервера для списка, его нужно добавить.
-    // Если оно только для деталей, то в этом DTO оно не нужно.
-    // Пока оставляем без него, так как его нет в вашем примере /api/v1/variants/
 ) 

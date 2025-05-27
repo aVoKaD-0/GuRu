@@ -13,13 +13,13 @@ interface EssayApiService {
     /**
      * Получает список всех тем сочинений.
      */
-    @GET("essay") // Endpoint: /api/v1/essay
+    @GET("essay") 
     suspend fun getAllEssayTopics(): Response<List<EssaySummaryDto>>
 
     /**
      * Получает полное содержимое сочинения по ID.
      * @param contentId ID сочинения
      */
-    @GET("essay/{contentId}") // Endpoint: /api/v1/essay/{contentId}
+    @GET("essay/{contentId}") 
     suspend fun getEssayContent(@Path("contentId") contentId: String): Response<EssayContentDto>
 } 

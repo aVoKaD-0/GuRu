@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.ResponseBody
+import retrofit2.Response
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -266,8 +267,26 @@ class ShpargalkaRepository @Inject constructor(
     suspend fun downloadShpargalkaPdf(pdfId: Int): File? {
         try {
             Log.d(TAG, "Начинаем загрузку PDF с ID: $pdfId")
-            val response = shpargalkiApiService.getShpargalkaPdf(pdfId)
-            
+
+            // Проверяем, не null ли наш сервис
+            if (shpargalkiApiService == null) {
+                Log.e(TAG, "shpargalkiApiService IS NULL!")
+                _errorMessage.postValue("Ошибка: Сервис API не инициализирован.")
+                return null
+            }
+            Log.i(TAG, "shpargalkiApiService инстанс: $shpargalkiApiService")
+
+            Log.i(TAG, "Вызов shpargalkiApiService.getShpargalkaPdf($pdfId)")
+            val response: Response<ResponseBody> // Объявляем переменную здесь
+            try {
+                response = shpargalkiApiService.getShpargalkaPdf(pdfId)
+                Log.i(TAG, "Ответ от shpargalkiApiService.getShpargalkaPdf($pdfId): Успешно=${response.isSuccessful}, Код=${response.code()}, Тело пустое=${response.body() == null}")
+            } catch (e: Exception) {
+                Log.e(TAG, "ИСКЛЮЧЕНИЕ непосредственно при вызове shpargalkiApiService.getShpargalkaPdf($pdfId)", e)
+                _errorMessage.postValue("Ошибка сети: ${e.message}")
+                return null
+            }
+
             if (response.isSuccessful && response.body() != null) {
                 val responseBody = response.body()!!
                 val contentType = response.headers()["Content-Type"]
@@ -327,6 +346,8 @@ class ShpargalkaRepository @Inject constructor(
                 val errorMessage = response.message()
                 Log.e(TAG, "Ошибка загрузки PDF: $errorCode $errorMessage")
                 _errorMessage.postValue("Ошибка загрузки PDF: $errorCode $errorMessage")
+                // Добавляем лог здесь, если ответ не успешный
+                Log.e(TAG, "Полный ответ при ошибке: $response")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Исключение при загрузке PDF", e)

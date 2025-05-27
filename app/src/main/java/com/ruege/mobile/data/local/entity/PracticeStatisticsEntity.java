@@ -23,7 +23,6 @@ public class PracticeStatisticsEntity {
     @ColumnInfo(name = "last_attempt_date")
     private long lastAttemptDate;
 
-    // Конструкторы
     public PracticeStatisticsEntity() {
     }
 
@@ -36,7 +35,6 @@ public class PracticeStatisticsEntity {
         this.lastAttemptDate = lastAttemptDate;
     }
 
-    // Геттеры
     @NonNull
     public String getEgeNumber() {
         return egeNumber;
@@ -54,7 +52,6 @@ public class PracticeStatisticsEntity {
         return lastAttemptDate;
     }
 
-    // Сеттеры
     public void setEgeNumber(@NonNull String egeNumber) {
         this.egeNumber = egeNumber;
     }
@@ -71,7 +68,6 @@ public class PracticeStatisticsEntity {
         this.lastAttemptDate = lastAttemptDate;
     }
 
-    // Геттер для вычисляемого поля - процент правильных ответов
     public float getSuccessRate() {
         if (totalAttempts == 0) return 0;
         return (float) correctAttempts / totalAttempts * 100;

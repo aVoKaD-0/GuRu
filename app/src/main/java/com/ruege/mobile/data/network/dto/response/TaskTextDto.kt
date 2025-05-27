@@ -5,5 +5,5 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class TaskTextDto(
-    @Json(name = "text") val text: String? // Текст может быть null, если что-то пошло не так на сервере
+    @Json(name = "text") val text: String?
 ) 

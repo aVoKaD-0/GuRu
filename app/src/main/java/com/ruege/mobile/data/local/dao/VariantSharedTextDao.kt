@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VariantSharedTextDao {
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateSharedText(sharedText: VariantSharedTextEntity)
 
@@ -29,8 +28,8 @@ interface VariantSharedTextDao {
     suspend fun deleteSharedTextById(sharedTextId: Int)
 
     @Query("DELETE FROM variant_shared_texts")
-    suspend fun clearAllSharedTexts() // Для служебных целей
+    suspend fun clearAllSharedTexts() 
 
-    @Query("SELECT * FROM variant_shared_texts WHERE variant_id = :variantId ORDER BY variant_shared_text_id ASC") // или другая логика сортировки
+    @Query("SELECT * FROM variant_shared_texts WHERE variant_id = :variantId ORDER BY variant_shared_text_id ASC")
     fun getSharedTextsByVariantIdFlow(variantId: Int): Flow<List<VariantSharedTextEntity>>
 } 

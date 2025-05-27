@@ -6,7 +6,7 @@ import com.google.gson.annotations.SerializedName
  * DTO для PracticeAttemptEntity при синхронизации.
  */
 data class PracticeAttemptSyncDto(
-    @SerializedName("attempt_id_local") // Чтобы не конфликтовать с серверным ID, если он будет другим
+    @SerializedName("attempt_id_local")
     val attemptIdLocal: Long,
     @SerializedName("task_id")
     val taskId: Int,

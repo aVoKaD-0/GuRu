@@ -1,14 +1,14 @@
-package com.ruege.mobile.model // Исправляем пакет
+package com.ruege.mobile.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class PracticeStatisticItem(
-    val id: String, // Может быть egeNumber
-    val egeDisplayNumber: String, // Например, "Задание 1"
+    val id: String, 
+    val egeDisplayNumber: String, 
     val totalAttempts: Int,
     val correctAttempts: Int,
-    val successRate: Int, // Уже рассчитанный процент
-    val lastAttemptDateFormatted: String // Отформатированная дата для отображения
+    val successRate: Int,
+    val lastAttemptDateFormatted: String 
 ) : Parcelable 

@@ -11,7 +11,7 @@ import androidx.room.PrimaryKey
     foreignKeys = [
         ForeignKey(
             entity = VariantTaskEntity::class,
-            parentColumns = ["variant_task_id"], // Связь с VariantTaskEntity по ее PK 'variant_task_id'
+            parentColumns = ["variant_task_id"],
             childColumns = ["variant_task_id"],
             onDelete = ForeignKey.CASCADE
         )
@@ -19,7 +19,7 @@ import androidx.room.PrimaryKey
     indices = [Index(value = ["variant_task_id"])]
 )
 data class VariantTaskOptionEntity(
-    @PrimaryKey // Если ID опции уникален глобально и приходит с сервера
+    @PrimaryKey 
     @ColumnInfo(name = "id")
     val id: Int,
 

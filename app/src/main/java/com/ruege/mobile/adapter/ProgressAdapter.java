@@ -48,14 +48,12 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
         ProgressItem item = progressItems.get(position);
         holder.titleTextView.setText(item.getTitle());
         
-        // Логирование для отладки
         android.util.Log.d("ProgressAdapter", "Позиция " + position + 
                           ": id=" + item.getId() + 
                           ", title=" + item.getTitle() + 
                           ", type=" + item.getType() + 
                           ", percentage=" + item.getPercentage());
         
-        // Устанавливаем описание, если оно есть
         if (item.getDescription() != null && !item.getDescription().isEmpty()) {
             holder.descriptionTextView.setText(item.getDescription());
             holder.descriptionTextView.setVisibility(View.VISIBLE);
@@ -63,48 +61,38 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
             holder.descriptionTextView.setVisibility(View.GONE);
         }
         
-        // Устанавливаем прогресс
         holder.progressBar.setProgress(item.getPercentage());
         holder.percentageTextView.setText(item.getPercentage() + "%");
         
-        // Отображаем индикатор статуса выполнения (если найден)
         if (holder.statusIndicator != null) {
             if (item.getPercentage() >= 100) {
-                // Задание выполнено
                 holder.statusIndicator.setVisibility(View.VISIBLE);
                 holder.statusIndicator.setImageResource(R.drawable.ic_done);
                 holder.statusIndicator.setColorFilter(
                     ContextCompat.getColor(holder.itemView.getContext(), R.color.success));
             } else if (item.getPercentage() > 0) {
-                // Задание в процессе
                 holder.statusIndicator.setVisibility(View.VISIBLE);
                 holder.statusIndicator.setImageResource(R.drawable.ic_in_progress);
                 holder.statusIndicator.setColorFilter(
                     ContextCompat.getColor(holder.itemView.getContext(), R.color.warning));
             } else {
-                // Задание не начато
                 holder.statusIndicator.setVisibility(View.GONE);
             }
         }
         
-        // Более надежная проверка типа элемента
         String itemType = item.getType();
         boolean isProgressType = "PROGRESS".equals(itemType);
         boolean isTaskType = "TASK".equals(itemType);
         
         ViewGroup.LayoutParams params = holder.itemView.getLayoutParams();
         
-        // Проверка темного режима
         boolean isDarkMode = isDarkMode(holder.itemView.getContext());
         android.util.Log.d("ProgressAdapter", "isDarkMode: " + isDarkMode);
         
-        // Разная визуализация в зависимости от типа
         if (isProgressType) {
-            // Общий прогресс - делаем карточку шире
             params.width = ViewGroup.LayoutParams.MATCH_PARENT;
             holder.itemView.setLayoutParams(params);
             
-            // Применяем разный фон в зависимости от темы
             if (isDarkMode) {
                 holder.itemView.setBackgroundResource(R.drawable.progress_card_background_primary_dark);
                 holder.titleTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary_dark));
@@ -116,27 +104,21 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
             holder.titleTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
             holder.percentageTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
             
-            // Для общего прогресса скрываем индикатор статуса, но оставляем видимым progressBar
             if (holder.statusIndicator != null) {
                 holder.statusIndicator.setVisibility(View.GONE);
             }
             
-            // Увеличиваем длину progress_bar для общего прогресса
             ViewGroup.LayoutParams progressParams = holder.progressBar.getLayoutParams();
             progressParams.width = dpToPx(holder.itemView.getContext(), 150);
             holder.progressBar.setLayoutParams(progressParams);
             
-            // Всегда показываем линию прогресса для общего прогресса, даже если процент равен 0
             holder.progressBar.setVisibility(View.VISIBLE);
             
             android.util.Log.d("ProgressAdapter", "Элемент " + item.getId() + " отображается как PROGRESS карточка");
         } else if (isTaskType) {
-            // Прогресс задания - стандартная карточка
-            // Ширина задается в XML разметке item_progress.xml ()
             params.width = dpToPx(holder.itemView.getContext(), 92);
             holder.itemView.setLayoutParams(params);
             
-            // Применяем разный фон в зависимости от темы
             if (isDarkMode) {
                 holder.itemView.setBackgroundResource(R.drawable.progress_card_background_dark);
                 holder.titleTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary_dark));
@@ -145,7 +127,6 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
                 holder.itemView.setBackgroundResource(R.drawable.progress_card_background);
             }
             
-            // Восстанавливаем стандартный размер progress_bar
             ViewGroup.LayoutParams progressParams = holder.progressBar.getLayoutParams();
             progressParams.width = dpToPx(holder.itemView.getContext(), 75);
             holder.progressBar.setLayoutParams(progressParams);
@@ -155,13 +136,11 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
             
             android.util.Log.d("ProgressAdapter", "Элемент " + item.getId() + " отображается как TASK карточка");
         } else {
-            // Неизвестный тип - обрабатываем как задание по умолчанию
             android.util.Log.w("ProgressAdapter", "Предупреждение: неизвестный тип элемента: " + itemType);
             
             params.width = dpToPx(holder.itemView.getContext(), 90);
             holder.itemView.setLayoutParams(params);
             
-            // Применяем разный фон в зависимости от темы
             if (isDarkMode) {
                 holder.itemView.setBackgroundResource(R.drawable.progress_card_background_dark);
                 holder.titleTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary_dark));
@@ -206,13 +185,10 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
      * @param newItems новый список элементов
      */
     public void updateItems(List<ProgressItem> newItems) {
-        // Защита от null
         List<ProgressItem> safeNewItems = newItems != null ? newItems : new ArrayList<>();
         
-        // Логгирование для отладки
         android.util.Log.d("ProgressAdapter", "Обновление элементов, новых элементов: " + safeNewItems.size());
         
-        // Выводим информацию о новых элементах
         for (int i = 0; i < safeNewItems.size(); i++) {
             ProgressItem item = safeNewItems.get(i);
             android.util.Log.d("ProgressAdapter", "Новый элемент " + i + 
@@ -222,7 +198,6 @@ public class ProgressAdapter extends RecyclerView.Adapter<ProgressAdapter.Progre
                               ", percentage=" + item.getPercentage());
         }
         
-        // Используем DiffUtil для эффективного обновления
         ProgressDiffCallback diffCallback = new ProgressDiffCallback(this.progressItems, safeNewItems);
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(diffCallback);
         

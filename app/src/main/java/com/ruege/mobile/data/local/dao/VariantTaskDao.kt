@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VariantTaskDao {
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateTask(task: VariantTaskEntity)
 
@@ -29,7 +28,7 @@ interface VariantTaskDao {
     suspend fun deleteTaskById(variantTaskId: Int)
 
     @Query("DELETE FROM variant_tasks")
-    suspend fun clearAllTasks() // Для служебных целей
+    suspend fun clearAllTasks()
 
     @Query("SELECT * FROM variant_tasks WHERE variant_id = :variantId ORDER BY order_in_variant ASC")
     fun getTasksByVariantIdFlow(variantId: Int): Flow<List<VariantTaskEntity>>

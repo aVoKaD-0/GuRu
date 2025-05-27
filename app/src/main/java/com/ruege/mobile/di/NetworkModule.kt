@@ -30,26 +30,17 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-
-    // Адрес для эмулятора Android, указывающий на localhost хост-машины
-    // Убедись, что Nginx настроен на порт 80 и проксирует на бэкенд
-    // private const val BASE_URL = "http://10.0.2.2:80/api/v1/"
-    // Используем IP-адрес хост-машины в локальной сети
     private const val BASE_URL = "http://46.8.232.191:80/api/v1/"
-    
-    // Константа для дебага
+
     private const val DEBUG = true
 
     @Provides
     @Singleton
     fun provideHttpLoggingInterceptor(): HttpLoggingInterceptor {
-        Log.d("NetworkModule", "provideHttpLoggingInterceptor: Creating HttpLoggingInterceptor with level BODY (if DEBUG). DEBUG is $DEBUG")
+        Log.d("NetworkModule", "provideHttpLoggingInterceptor: Creating HttpLoggingInterceptor. DEBUG is $DEBUG")
         return HttpLoggingInterceptor().apply {
-            level = if (DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
-            } else {
-                HttpLoggingInterceptor.Level.NONE
-            }
+            level = HttpLoggingInterceptor.Level.BODY
+            Log.d("NetworkModule", "HttpLoggingInterceptor level set to BODY for testing.")
         }
     }
 
@@ -60,14 +51,18 @@ object NetworkModule {
         authInterceptor: AuthInterceptor,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
-        Log.d("NetworkModule", "provideOkHttpClient: Creating OkHttpClient with AuthInterceptor and TokenAuthenticator.")
-        return OkHttpClient.Builder()
+        Log.d("NetworkModule", "provideOkHttpClient: START Creating OkHttpClient.")
+        Log.d("NetworkModule", "provideOkHttpClient: Using loggingInterceptor: $loggingInterceptor")
+        Log.d("NetworkModule", "provideOkHttpClient: Using authInterceptor: $authInterceptor")
+        val client = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .authenticator(tokenAuthenticator)
             .build()
+        Log.d("NetworkModule", "provideOkHttpClient: FINISHED Creating OkHttpClient (AuthInterceptor ENABLED, TokenAuthenticator TEMPORARILY DISABLED): $client")
+        return client
     }
 
     @Provides
@@ -83,12 +78,14 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient, moshi: Moshi): Retrofit {
-        Log.d("NetworkModule", "provideRetrofit: Creating Retrofit instance with base URL: $BASE_URL")
-        return Retrofit.Builder()
+        Log.d("NetworkModule", "provideRetrofit: START Creating Retrofit with OkHttpClient: $okHttpClient and Moshi: $moshi")
+        val retrofit = Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
+        Log.d("NetworkModule", "provideRetrofit: FINISHED Creating Retrofit: $retrofit with base URL: $BASE_URL")
+        return retrofit
     }
 
     @Provides
@@ -146,8 +143,4 @@ object NetworkModule {
         Log.d("NetworkModule", "providePracticeApiService: Creating PracticeApiService instance.")
         return retrofit.create(com.ruege.mobile.data.network.api.PracticeApiService::class.java)
     }
-
-    // AuthInterceptor зависит от TokenManager, который Hilt уже знает как создать (@Inject в конструкторе TokenManager)
-    // Поэтому дополнительно предоставлять AuthInterceptor не нужно, Hilt сам его создаст.
-    // Однако, мы его временно отключили в provideOkHttpClient
 } 

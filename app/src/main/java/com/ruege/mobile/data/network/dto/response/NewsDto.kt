@@ -18,11 +18,7 @@ data class NewsDto(
     @Json(name = "created_at") val createdAt: String?,
     @Json(name = "updated_at") val updatedAt: String?
 ) {
-    /**
-     * Конвертирует DTO в Entity для сохранения в БД.
-     */
     fun toEntity(): NewsEntity {
-        // Преобразуем строковые даты в миллисекунды
         val pubDate = parseISODate(publicationDate)
         val created = parseISODate(createdAt)
         val updated = parseISODate(updatedAt)
@@ -48,15 +44,13 @@ data class NewsDto(
      */
     private fun parseISODate(dateStr: String?): Long {
         return try {
-            // Если строка пустая - используем текущее время
             if (dateStr.isNullOrEmpty()) {
                 System.currentTimeMillis()
             } else {
-                // Пытаемся распарсить ISO дату
                 java.time.Instant.parse(dateStr).toEpochMilli()
             }
         } catch (e: Exception) {
-            System.currentTimeMillis() // В случае ошибки используем текущее время
+            System.currentTimeMillis() 
         }
     }
 } 

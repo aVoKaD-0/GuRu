@@ -13,26 +13,26 @@ data class SyncQueueEntity(
     val id: Long = 0,
     
     @ColumnInfo(name = "entity_type")
-    val entityType: String, // Тип сущности (progress, settings, etc.)
+    val entityType: String, 
     
     @ColumnInfo(name = "entity_id")
-    val entityId: Long, // ID сущности для синхронизации
+    val entityId: Long, 
     
     @ColumnInfo(name = "operation_type")
-    val operationType: String, // Тип операции (INSERT, UPDATE, DELETE)
+    val operationType: String,
     
     @ColumnInfo(name = "data")
-    val data: String, // Сериализованные данные для синхронизации (JSON)
+    val data: String, 
     
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis(), // Время создания записи
+    val createdAt: Long = System.currentTimeMillis(),
     
     @ColumnInfo(name = "attempts")
-    val attempts: Int = 0, // Количество попыток синхронизации
+    val attempts: Int = 0, 
     
     @ColumnInfo(name = "last_attempt")
-    val lastAttempt: Long? = null, // Время последней попытки синхронизации
+    val lastAttempt: Long? = null,
     
     @ColumnInfo(name = "status")
-    val status: String = "PENDING" // Статус (PENDING, IN_PROGRESS, FAILED, COMPLETED)
+    val status: String = "PENDING" 
 ) 

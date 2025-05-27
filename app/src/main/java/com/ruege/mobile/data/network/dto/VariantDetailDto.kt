@@ -18,10 +18,10 @@ data class VariantDetailDto(
     val isOfficial: Boolean,
 
     @Json(name = "created_at")
-    val createdAt: String, // Оставляем как String, DateAdapter разберется
+    val createdAt: String, 
 
     @Json(name = "updated_at")
-    val updatedAt: String?, // Оставляем как String, DateAdapter разберется
+    val updatedAt: String?, 
 
     @Json(name = "shared_texts")
     val sharedTexts: List<VariantSharedTextDto>?,

@@ -14,7 +14,7 @@ interface PracticeApiService {
      * Полная синхронизация статистики практики.
      * Отправляет все локальные данные, получает все серверные данные.
      */
-    @GET("practice-statistics/sync") // Используем practice-statistics вместо practice-stastitice
+    @GET("practice-statistics/sync") 
     suspend fun syncPracticeStatistics(
         @Body practiceSyncRequest: PracticeSyncRequest
     ): Response<PracticeSyncResponse>
@@ -24,9 +24,9 @@ interface PracticeApiService {
      * Отправляет только измененные/новые локальные данные.
      * Сервер решает, как их смержить.
      */
-    @POST("practice-statistics/branch") // Используем practice-statistics вместо practice-stastitice
+    @POST("practice-statistics/branch") 
     suspend fun updatePracticeStatistics(
-        @Body practiceSyncRequest: PracticeSyncRequest // Может потребоваться другой DTO для частичного обновления
-    ): Response<PracticeSyncResponse> // Или другой Response DTO, если ответ отличается
+        @Body practiceSyncRequest: PracticeSyncRequest 
+    ): Response<PracticeSyncResponse> 
 
 } 

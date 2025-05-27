@@ -42,5 +42,5 @@ interface VariantDao {
     fun getDownloadedVariants(): Flow<List<VariantEntity>>
 
     @Query("DELETE FROM variants")
-    suspend fun clearAllVariants() // Для служебных целей, например, при выходе пользователя
+    suspend fun clearAllVariants()
 } 

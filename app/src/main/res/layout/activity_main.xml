@@ -13,63 +13,61 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- Верхняя панель -->
-        <RelativeLayout
-            android:id="@+id/top_panel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="@dimen/spacing_medium"
-            app:layout_constraintTop_toTopOf="parent">
-
-            <!-- Кнопка темы -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/theme_toggle"
-                android:layout_width="@dimen/icon_size_xlarge"
-                android:layout_height="@dimen/icon_size_xlarge"
-                android:layout_marginStart="@dimen/spacing_small"
-                android:layout_centerVertical="true"
-                android:contentDescription="Переключить тему приложения"
-                app:icon="@drawable/ic_lantern_off"
-                app:iconSize="@dimen/icon_size_large"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
-                app:iconTint="@null"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:backgroundTint="@android:color/transparent"
-                app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full"
-                style="@style/Widget.Material3.Button.IconButton"/>
-
-            <!-- Аватар пользователя -->
-            <ImageView
-                android:id="@+id/user_avatar"
-                android:layout_width="@dimen/icon_size_xlarge"
-                android:layout_height="@dimen/icon_size_xlarge"
-                android:layout_alignParentEnd="true"
-                android:background="@drawable/circle_background"
-                android:contentDescription="Профиль пользователя"
-                android:src="@drawable/ic_profile"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackgroundBorderless"
-                android:padding="@dimen/spacing_tiny" />
-        </RelativeLayout>
-
         <!-- Прокручиваемый контент -->
         <androidx.core.widget.NestedScrollView
             android:id="@+id/scroll_content"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="@dimen/spacing_small"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/top_panel">
+            app:layout_constraintTop_toTopOf="parent">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
+
+                <!-- Вставляем RelativeLayout (top_panel) сюда -->
+                <RelativeLayout
+                    android:id="@+id/top_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="@dimen/spacing_medium">
+
+                    <!-- Кнопка темы -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/theme_toggle"
+                        android:layout_width="@dimen/icon_size_xlarge"
+                        android:layout_height="@dimen/icon_size_xlarge"
+                        android:layout_marginStart="@dimen/spacing_small"
+                        android:layout_centerVertical="true"
+                        android:contentDescription="Переключить тему приложения"
+                        app:icon="@drawable/ic_lantern_off"
+                        app:iconSize="@dimen/icon_size_large"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconTint="@null"
+                        android:insetLeft="0dp"
+                        android:insetTop="0dp"
+                        android:insetRight="0dp"
+                        android:insetBottom="0dp"
+                        app:backgroundTint="@android:color/transparent"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full"
+                        style="@style/Widget.Material3.Button.IconButton"/>
+
+                    <!-- Аватар пользователя -->
+                    <ImageView
+                        android:id="@+id/user_avatar"
+                        android:layout_width="@dimen/icon_size_xlarge"
+                        android:layout_height="@dimen/icon_size_xlarge"
+                        android:layout_alignParentEnd="true"
+                        android:background="@drawable/circle_background"
+                        android:contentDescription="Профиль пользователя"
+                        android:src="@drawable/ic_profile"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?attr/selectableItemBackgroundBorderless"
+                        android:padding="@dimen/spacing_tiny" />
+                </RelativeLayout>
 
                 <!-- Шиммер для прогресса -->
                 <com.facebook.shimmer.ShimmerFrameLayout

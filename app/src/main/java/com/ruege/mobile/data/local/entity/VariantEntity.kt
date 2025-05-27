@@ -17,17 +17,17 @@ data class VariantEntity(
     val isOfficial: Boolean,
 
     @ColumnInfo(name = "created_at")
-    val createdAt: String, // ISO 8601
+    val createdAt: String, 
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: String?, // ISO 8601, сделано nullable, т.к. в DTO оно nullable
+    val updatedAt: String?, 
 
     @ColumnInfo(name = "task_count")
     val taskCount: Int,
 
-    @ColumnInfo(name = "is_downloaded", defaultValue = "0") // SQLite stores Boolean as INTEGER 0 or 1
+    @ColumnInfo(name = "is_downloaded", defaultValue = "0") 
     val isDownloaded: Boolean = false,
 
     @ColumnInfo(name = "last_accessed_at")
-    val lastAccessedAt: String? = null // ISO 8601, опционально
+    val lastAccessedAt: String? = null 
 ) 

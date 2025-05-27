@@ -23,9 +23,4 @@ interface VariantApiService {
         @Path("variant_id") variantId: Int,
         @Body answers: List<UserAnswerPayloadDto>
     ): Response<List<UserAnswerResponseItemDto>>
-
-    // TODO: Когда понадобится, добавить метод для получения деталей варианта
-    // Например, для отображения одного конкретного варианта с заданиями
-    // @GET("variants/{variant_id}")
-    // suspend fun getVariantDetails(@Path("variant_id") variantId: Int): Response<VariantDetailDto> // Предполагаемый DTO
 } 

@@ -18,7 +18,6 @@ data class TaskDetailDto(
     @Json(name = "text_id") val textId: Int?,
     @Json(name = "text") val text: TextDto?
 ) {
-    // Преобразуем поля таблицы ruege_tasks в формат, ожидаемый приложением
     val taskId: String get() = id.toString()
     val title: String get() = "Задание $egeNumber" 
     val description: String get() = if (text != null) "Прочитайте текст и выполните задание" else ""
@@ -27,10 +26,7 @@ data class TaskDetailDto(
     val maxPoints: Int get() = 10
     val timeLimit: Int get() = 60
     val solutions: List<SolutionDto>? get() = null
-    
-    /**
-     * Конвертирует DTO в Entity для сохранения в БД.
-     */
+
     fun toEntity(): com.ruege.mobile.data.local.entity.TaskEntity {
         return com.ruege.mobile.data.local.entity.TaskEntity(
             this.id,
@@ -41,7 +37,7 @@ data class TaskDetailDto(
             this.explanation,
             this.source,
             this.textId,
-            "TEXT" // По умолчанию используем тип TEXT
+            "TEXT"
         )
     }
 }

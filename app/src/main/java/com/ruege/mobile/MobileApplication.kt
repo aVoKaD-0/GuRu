@@ -10,6 +10,7 @@ import com.ruege.mobile.data.local.DBResetHelper
 import com.ruege.mobile.data.repository.ProgressRepository
 import com.ruege.mobile.data.repository.ProgressSyncRepository
 import com.ruege.mobile.worker.ProgressSyncWorkerFactory
+import com.ruege.mobile.data.local.preferences.AppPreferences
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 import timber.log.Timber
@@ -18,12 +19,10 @@ import timber.log.Timber
 class MobileApplication : Application(), Configuration.Provider {
     companion object {
         private const val TAG = "MobileApplication"
-        private const val DB_VERSION = 12 // Соответствует версии базы данных в AppDatabase
-        private const val FORCE_DB_RESET = false // Замените на true, если нужно принудительно сбрасывать базу данных при запуске
+        private const val DB_VERSION = 12
+        private const val FORCE_DB_RESET = false
     }
-    
-    // Инжектируем сюда готовую конфигурацию из WorkManagerModule, 
-    // но используем другое имя, чтобы избежать конфликта с методом getWorkManagerConfiguration()
+
     @Inject
     lateinit var workConfig: Configuration
     
@@ -45,19 +44,15 @@ class MobileApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        
-        // Активируем Timber для логирования
+
         Timber.plant(Timber.DebugTree())
-        
-        // Инициализируем репозиторий для синхронизации прогресса
+
         progressSyncRepository.initialize()
         Log.d(TAG, "ProgressSyncRepository.initialize() вызван в MobileApplication")
-        
-        // Инициализируем репозиторий прогресса
+
         progressRepository.initialize()
         Log.d(TAG, "ProgressRepository.initialize() вызван в MobileApplication")
 
-        // Проверяем необходимость сброса БД на основе версии БД        
         val preferences = getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
         val currentDbVersion = preferences.getInt("db_version", 0)
         
@@ -66,8 +61,14 @@ class MobileApplication : Application(), Configuration.Provider {
             preferences.edit().putInt("db_version", DB_VERSION).apply()
         }
         
-        // Отключаем темную тему
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        val appPreferences = AppPreferences(this)
+        if (appPreferences.isDarkTheme()) {
+            Log.d(TAG, "с")
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        } else {
+            Log.d(TAG, "тема стоит светлая")
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
         
         Log.d(TAG, "MobileApplication onCreate complete")
     }

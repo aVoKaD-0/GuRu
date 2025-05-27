@@ -40,7 +40,6 @@ class VariantAdapter(
         fun bind(variant: VariantEntity, listener: OnVariantClickListener) {
             tvVariantName.text = variant.name
             
-            // Установка количества заданий
             val taskCountText = when (variant.taskCount) {
                 0 -> "Нет заданий"
                 1 -> "1 задание"
@@ -49,7 +48,6 @@ class VariantAdapter(
             }
             tvVariantTaskCount.text = taskCountText
             
-            // Показываем статус (официальный/скачан), если применимо
             if (variant.isOfficial) {
                 tvVariantStatus.visibility = View.VISIBLE
                 tvVariantStatus.text = "Официальный"
@@ -60,7 +58,6 @@ class VariantAdapter(
                 tvVariantStatus.visibility = View.GONE
             }
             
-            // Установка обработчика клика на весь элемент
             itemView.setOnClickListener {
                 listener.onVariantClick(variant)
             }

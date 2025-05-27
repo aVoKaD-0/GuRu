@@ -6,19 +6,28 @@
     android:layout_height="match_parent"
     android:background="@android:color/white">
 
+    <!-- Ручка для перетаскивания BottomSheet -->
+    <com.google.android.material.bottomsheet.BottomSheetDragHandleView
+        android:id="@+id/drag_handle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- Заголовок -->
     <TextView
         android:id="@+id/tv_shpargalka_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         android:layout_marginEnd="16dp"
         android:textAppearance="?attr/textAppearanceHeadline6"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/drag_handle"
         tools:text="Название шпаргалки" />
 
     <!-- Описание (если есть) -->
@@ -71,6 +80,8 @@
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
         android:background="@android:color/white"
+        android:focusableInTouchMode="false" 
+        android:clickable="false"
         app:layout_constraintBottom_toTopOf="@id/btn_download_pdf"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

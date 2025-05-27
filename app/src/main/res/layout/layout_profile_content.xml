@@ -67,21 +67,21 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
-    <!-- Синхронизация -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/spacing_medium"
-        android:layout_marginBottom="@dimen/spacing_small"
-        android:text="Синхронизация"
-        android:textSize="@dimen/text_size_subhead"
-        android:textColor="?android:attr/textColorPrimary"
-        android:textStyle="bold" />
+<!--    &lt;!&ndash; Синхронизация &ndash;&gt;-->
+<!--    <TextView-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="@dimen/spacing_medium"-->
+<!--        android:layout_marginBottom="@dimen/spacing_small"-->
+<!--        android:text="Синхронизация"-->
+<!--        android:textSize="@dimen/text_size_subhead"-->
+<!--        android:textColor="?android:attr/textColorPrimary"-->
+<!--        android:textStyle="bold" />-->
 
-    <!-- Карточка статуса синхронизации -->
-    <include
-        android:id="@+id/sync_status_card"
-        layout="@layout/layout_sync_status" />
+<!--    &lt;!&ndash; Карточка статуса синхронизации &ndash;&gt;-->
+<!--    <include-->
+<!--        android:id="@+id/sync_status_card"-->
+<!--        layout="@layout/layout_sync_status" />-->
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_missions"

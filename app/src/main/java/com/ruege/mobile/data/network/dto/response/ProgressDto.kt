@@ -17,19 +17,12 @@ data class ProgressDto(
     @Json(name = "percentage") val percentage: Float,
     @Json(name = "last_updated") val lastUpdated: Long
 ) {
-    /**
-     * Конвертирует DTO в Entity для сохранения в БД.
-     */
     fun toEntity(): ProgressEntity {
         val completed = completedCount == totalCount
         val lastAccessedLong: Long
         if (lastUpdated != null) {
-            // Попытаться распарсить lastUpdated (ISO строку) в Long (ms)
-            // например, ZonedDateTime.parse(lastUpdated).toInstant().toEpochMilli()
-            // Нужен соответствующий парсер дат для Android
             lastAccessedLong = lastUpdated
         } else {
-            // Если lastUpdated от сервера null, можно использовать общий timestamp элемента
             lastAccessedLong = System.currentTimeMillis()
         }
         return ProgressEntity(

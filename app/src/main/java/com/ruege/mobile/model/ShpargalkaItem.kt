@@ -4,21 +4,21 @@ package com.ruege.mobile.model
  * Модель шпаргалки для отображения в приложении
  */
 data class ShpargalkaItem(
-    val id: Int, // ID шпаргалки
-    val title: String, // Название шпаргалки
-    val description: String?, // Описание шпаргалки
-    val groupId: String, // ID группы, к которой относится шпаргалка
-    val groupTitle: String, // Название группы
-    val fileName: String?, // Имя файла шпаргалки
-    val publishTime: String? = null, // Время публикации
-    var isDownloaded: Boolean = false // Флаг, скачана ли шпаргалка
+    val id: Int, 
+    val title: String, 
+    val description: String?,
+    val groupId: String, 
+    val groupTitle: String,
+    val fileName: String?, 
+    val publishTime: String? = null, 
+    var isDownloaded: Boolean = false
 )
 
 /**
  * Модель группы шпаргалок
  */
 data class ShpargalkaGroup(
-    val id: String, // ID группы
-    val title: String, // Название группы
-    val items: List<ShpargalkaItem> // Список шпаргалок в группе
+    val id: String, 
+    val title: String,
+    val items: List<ShpargalkaItem>
 ) 

@@ -20,6 +20,7 @@ import com.ruege.mobile.data.network.dto.response.TheoryContentDto
 import com.ruege.mobile.ui.viewmodel.ContentViewModel
 import com.ruege.mobile.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
+import android.content.res.Configuration
 
 private const val ARG_CONTENT_ID = "content_id"
 private const val ARG_TITLE = "title"
@@ -148,6 +149,15 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialog = super.onCreateDialog(savedInstanceState) as BottomSheetDialog
+
+        // Логирование текущей темы
+        val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        when (currentNightMode) {
+            Configuration.UI_MODE_NIGHT_NO -> Log.d(TAG_THEORY_BS, "onCreateDialog: Current theme is Light.")
+            Configuration.UI_MODE_NIGHT_YES -> Log.d(TAG_THEORY_BS, "onCreateDialog: Current theme is Dark.")
+            Configuration.UI_MODE_NIGHT_UNDEFINED -> Log.d(TAG_THEORY_BS, "onCreateDialog: Current theme is Undefined.")
+        }
+
         dialog.setOnShowListener { dialogInterface ->
             val bottomSheetDialog = dialogInterface as BottomSheetDialog
             val parentLayout =

@@ -32,21 +32,16 @@ class TokenAuthenticator @Inject constructor(
     override fun authenticate(route: Route?, response: Response): Request? {
         Log.d(TAG, "Authentication required (401). URL: ${response.request.url}")
         
-        // Получаем текущий refresh токен
         val currentRefreshToken = tokenManager.getRefreshToken()
 
         if (currentRefreshToken == null) {
             Log.w(TAG, "No refresh token found. Cannot refresh.")
-            return null // Не можем обновить токен
+            return null
         }
         
-        // Добавляем синхронизацию, чтобы избежать гонки запросов на обновление
         synchronized(this) {
             Log.d(TAG, "Entered synchronized block.")
-            // Проверяем, не обновил ли уже токен другой поток, пока мы ждали synchronized
             val newAccessTokenCheck = tokenManager.getAccessToken()
-            // Если токен в хедере неудачного запроса НЕ совпадает с текущим сохраненным,
-            // значит, токен уже обновили - просто повторяем запрос с новым токеном.
             val authHeader = response.request.header("Authorization")
             if (newAccessTokenCheck != null && authHeader != null && authHeader != "Bearer $newAccessTokenCheck") {
                 Log.d(TAG, "Token seems to be refreshed already by another thread. Retrying with new token.")
@@ -54,15 +49,11 @@ class TokenAuthenticator @Inject constructor(
                     .header("Authorization", "Bearer $newAccessTokenCheck")
                     .build()
             }
-
-            // Токен еще не обновлен, выполняем запрос на обновление
             Log.d(TAG, "Performing token refresh request.")
-            // Блокируем поток для выполнения запроса
             return runBlocking { 
                 val refreshed = performTokenRefresh(currentRefreshToken)
                 if (refreshed) {
                     Log.d(TAG, "Token refresh successful inside runBlocking. Retrying original request.")
-                    // Повторяем исходный запрос с новым Access Token
                     val newToken = tokenManager.getAccessToken()
                     if (newToken != null) {
                         response.request.newBuilder()
@@ -74,12 +65,11 @@ class TokenAuthenticator @Inject constructor(
                     }
                 } else {
                     Log.w(TAG, "Token refresh failed inside runBlocking.")
-                    // Ошибка обновления - очищаем токены
                     tokenManager.clearTokens()
-                    null // Не удалось аутентифицироваться
+                    null
                 }
             }
-        } // конец synchronized
+        } 
     }
     
     /**
@@ -90,24 +80,18 @@ class TokenAuthenticator @Inject constructor(
     private suspend fun performTokenRefresh(refreshToken: String): Boolean {
         Log.d(TAG, "Attempting to refresh token")
         try {
-            // Используем Provider, чтобы избежать циклической зависимости
             val authApiService = authApiServiceProvider.get()
             
-            // Создаем запрос на обновление токена
             val request = RefreshTokenRequestDto(refreshToken = refreshToken)
             
-            // Выполняем запрос
             val response = authApiService.refreshToken(request)
             
-            // Обрабатываем ответ
             if (response.isSuccessful && response.body() != null) {
                 val tokenDto = response.body()!!
                 
-                // Сохраняем новые токены
                 tokenManager.saveAccessToken(tokenDto.accessToken)
                 tokenManager.saveRefreshToken(tokenDto.refreshToken)
                 
-                // Сохраняем срок действия токена, если он есть в ответе
                 tokenDto.expiresIn?.let { expiresIn ->
                     tokenManager.saveTokenExpiresIn(expiresIn)
                     Log.d(TAG, "Token expires in $expiresIn seconds")

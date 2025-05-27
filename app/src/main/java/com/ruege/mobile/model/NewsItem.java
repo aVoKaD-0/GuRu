@@ -55,8 +55,7 @@ public class NewsItem {
         this.fullContentUrl = fullContentUrl;
     }
     
-    // Добавляем метод getContentId для совместимости с кодом MainActivity
     public String getContentId() {
-        return fullContentUrl; // Используем fullContentUrl как contentId
+        return fullContentUrl; 
     }
 } 

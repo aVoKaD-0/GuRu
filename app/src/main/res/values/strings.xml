@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">РуЕГЭ</string>
+    <string name="app_name">GuRu</string>
     <string name="welcome_title">Подготовка к ЕГЭ по русскому языку</string>
     <string name="get_started">Начать</string>
     <string name="theory">Теория</string>
@@ -27,8 +27,7 @@
     <string name="incorrect_answer">Неправильно</string>
     <string name="explanation">Объяснение</string>
     <string name="next_task">Следующее задание</string>
-    
-    <!-- Строки для статистики практики -->
+
     <string name="practice_statistics">Статистика практики</string>
     <string name="task_detail">Детали задания</string>
     <string name="overall_statistics">Общая статистика</string>

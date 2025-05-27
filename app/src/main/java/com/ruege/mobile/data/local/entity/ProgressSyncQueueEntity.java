@@ -93,7 +93,6 @@ public class ProgressSyncQueueEntity {
         this.solvedTaskIds = solvedTaskIds;
     }
 
-    // Геттеры
     public long getId() {
         return id;
     }
@@ -139,7 +138,6 @@ public class ProgressSyncQueueEntity {
         return solvedTaskIds;
     }
 
-    // Сеттеры
     public void setId(long id) {
         this.id = id;
     }
@@ -184,7 +182,6 @@ public class ProgressSyncQueueEntity {
         this.solvedTaskIds = solvedTaskIds;
     }
 
-    // Увеличение счетчика попыток
     public void incrementRetryCount() {
         this.retryCount++;
     }

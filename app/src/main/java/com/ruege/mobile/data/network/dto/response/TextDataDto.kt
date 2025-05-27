@@ -1,6 +1,5 @@
 package com.ruege.mobile.data.network.dto.response
 
-// import com.google.gson.annotations.SerializedName // Удаляем импорт Gson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -16,5 +15,4 @@ data class TextDataDto(
     val source: String?,
     @Json(name = "title")
     val title: String?
-    // Если бэкенд для объекта "text" возвращает еще какие-то поля, добавьте их сюда
 ) 

@@ -13,7 +13,7 @@ interface TheoryApiService {
     /**
      * Получает список всех тем теории.
      */
-    @GET("theory") // Endpoint: /api/v1/theory
+    @GET("theory") 
     suspend fun getAllTheory(): Response<List<TheorySummaryDto>>
     
     /**

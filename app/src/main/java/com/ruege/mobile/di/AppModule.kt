@@ -20,12 +20,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-    
-    // Другие провайдеры могут быть уже определены здесь
-    
-    /**
-     * Предоставляет Context для инъекции в компоненты приложения
-     */
     @Provides
     @Singleton
     fun provideContext(@ApplicationContext context: Context): Context {

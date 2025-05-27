@@ -51,12 +51,10 @@ public class ProgressEntity {
     @Nullable
     @ColumnInfo(name = "solved_task_ids")
     private String solvedTaskIds;
-    
-    // Кэш списка ID задач для избежания повторного парсинга JSON
+
     @Ignore
     private List<String> solvedTaskIdsCache = null;
 
-    // Конструкторы
     public ProgressEntity() {
     }
 
@@ -106,7 +104,6 @@ public class ProgressEntity {
         this.solvedTaskIds = solvedTaskIds;
     }
 
-    // Геттеры
     @NonNull
     public String getContentId() {
         return contentId;
@@ -143,7 +140,6 @@ public class ProgressEntity {
         return solvedTaskIds;
     }
 
-    // Сеттеры
     public void setContentId(@NonNull String contentId) {
         this.contentId = contentId;
     }
@@ -174,42 +170,34 @@ public class ProgressEntity {
     
     public void setSolvedTaskIds(@Nullable String solvedTaskIds) {
         this.solvedTaskIds = solvedTaskIds;
-        // Сбрасываем кэш, так как данные обновились
         this.solvedTaskIdsCache = null;
     }
 
     /**
      * Получает номер задания ЕГЭ из contentId или title
-     * @return номер задания ЕГЭ или -1, если не удалось определить
      */
     public int getEgeNumber() {
         try {
-            // Пытаемся извлечь номер из contentId, если он в формате task_group_X
             if (contentId != null && contentId.startsWith("task_group_")) {
                 String numberPart = contentId.replace("task_group_", "");
                 return Integer.parseInt(numberPart);
             }
             
-            // Если не получилось из contentId, пробуем извлечь из title
             if (title != null && title.startsWith("Задание ")) {
                 String numberPart = title.replace("Задание ", "");
                 return Integer.parseInt(numberPart);
             }
             
-            // Если не удалось определить номер, возвращаем -1
             return -1;
         } catch (NumberFormatException e) {
-            // В случае ошибки возвращаем -1
             return -1;
         }
     }
     
     /**
      * Возвращает список ID решенных заданий
-     * @return список ID решенных заданий или пустой список
      */
     public List<String> getSolvedTaskIdsList() {
-        // Если кэш уже заполнен, возвращаем его
         if (solvedTaskIdsCache != null) {
             return solvedTaskIdsCache;
         }
@@ -226,7 +214,6 @@ public class ProgressEntity {
             for (int i = 0; i < jsonArray.length(); i++) {
                 taskIds.add(jsonArray.getString(i));
             }
-            // Сохраняем результат в кэш
             solvedTaskIdsCache = taskIds;
         } catch (JSONException e) {
             Log.e(TAG, "Ошибка при парсинге списка решенных заданий", e);
@@ -237,8 +224,6 @@ public class ProgressEntity {
     
     /**
      * Проверяет, решено ли задание с указанным ID
-     * @param taskId ID задания
-     * @return true, если задание решено
      */
     public boolean isTaskSolved(String taskId) {
         return getSolvedTaskIdsList().contains(taskId);
@@ -246,8 +231,6 @@ public class ProgressEntity {
     
     /**
      * Преобразует список ID заданий в JSON-строку
-     * @param taskIds список ID заданий
-     * @return JSON-строка
      */
     public static String listToJsonString(List<String> taskIds) {
         if (taskIds == null || taskIds.isEmpty()) {

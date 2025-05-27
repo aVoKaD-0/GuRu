@@ -19,9 +19,6 @@ data class TaskDto(
     @Json(name = "text_id") val textId: Int?,
     @Json(name = "text") val text: TextDataDto? = null
 ) {
-    /**
-     * Конвертирует DTO в Entity для сохранения в БД.
-     */
     fun toEntity(): TaskEntity {
         return TaskEntity(
             this.id,
@@ -32,7 +29,7 @@ data class TaskDto(
             this.explanation,
             this.source,
             this.textId,
-            "TEXT" // По умолчанию используем тип TEXT
+            "TEXT"
         )
     }
 }

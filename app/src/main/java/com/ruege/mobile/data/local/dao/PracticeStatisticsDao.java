@@ -14,8 +14,6 @@ import kotlinx.coroutines.flow.Flow;
 
 @Dao
 public interface PracticeStatisticsDao {
-
-    // Data class для агрегированной статистики
     public static class AggregatedPracticeStatistics {
         @ColumnInfo(name = "total_sum_attempts")
         public int totalAttempts;

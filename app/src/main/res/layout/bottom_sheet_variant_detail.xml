@@ -75,7 +75,7 @@
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- Контейнер для решения варианта (изначально скрыт) -->
+    <!-- Контейнер для решения варианта -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/nsv_variant_solving_area"
         android:layout_width="match_parent"
@@ -126,7 +126,7 @@
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- Таймер, привязан к верхней части экрана, но виден только с ll_variant_solving_area -->
+    <!-- Таймер -->
     <TextView
         android:id="@+id/tv_timer"
         android:layout_width="wrap_content"

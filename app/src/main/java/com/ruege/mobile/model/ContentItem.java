@@ -75,8 +75,7 @@ public class ContentItem {
         this.isNew = isNew;
     }
     
-    // Добавляем метод getContentId для совместимости с кодом MainActivity
     public String getContentId() {
-        return id; // Используем id как contentId
+        return id;
     }
 } 

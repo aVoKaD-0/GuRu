@@ -169,36 +169,34 @@ class ProgressRepository @Inject constructor(
                 val syncResult = progressSyncRepository.forceSyncWithServer()
                 
                 if (!syncResult) {
-                    Log.w(TAG, "Не удалось синхронизировать прогресс с сервером, загружаем локальные данные")
-                    
-                    // Проверяем есть ли локальные данные
+                    Log.w(TAG, "Не удалось синхронизировать прогресс с сервером. Локальные данные (если есть) будут использованы.")
+                    // Не вызываем initializeUserProgress() здесь, так как это может перезаписать
+                    // данные, которые были только что созданы checkAndInitializeProgress для нового пользователя.
+                    // Если данных нет и для существующего пользователя, это отдельная проблема.
                     val localProgress = progressDao.getProgressByUserId(DEFAULT_USER_ID).first()
-                    
                     if (localProgress.isEmpty()) {
-                        Log.d(TAG, "Локальные данные отсутствуют, инициализируем базовый прогресс")
-                        initializeUserProgress()
+                        Log.d(TAG, "Локальные данные отсутствуют после неудачной синхронизации.")
+                        // Для нового пользователя это ожидаемо, если checkAndInitializeProgress еще не отработал.
+                        // Для существующего - это может быть проблемой, но loadMockProgress() или другие фолбеки не должны вызываться автоматически.
                     } else {
-                        Log.d(TAG, "Найдены локальные данные: ${localProgress.size} записей")
+                        Log.d(TAG, "Найдены локальные данные: ${localProgress.size} записей после неудачной синхронизации.")
                     }
                 } else {
                     Log.d(TAG, "Прогресс успешно синхронизирован с сервером")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Ошибка при обновлении прогресса из сети", e)
-                
-                // Проверяем есть ли локальные данные
-                try {
+                 // Аналогично, не вызываем initializeUserProgress() или loadMockProgress() автоматически.
+                // Обработка ошибок и фолбеки должны быть более централизованными.
+                 try {
                     val localProgress = progressDao.getProgressByUserId(DEFAULT_USER_ID).first()
-                    
                     if (localProgress.isEmpty()) {
-                        Log.d(TAG, "Локальные данные отсутствуют, инициализируем базовый прогресс")
-                        initializeUserProgress()
+                        Log.d(TAG, "Локальные данные отсутствуют после ошибки синхронизации.")
                     } else {
-                        Log.d(TAG, "Используем существующие локальные данные: ${localProgress.size} записей")
+                        Log.d(TAG, "Используем существующие локальные данные: ${localProgress.size} записей после ошибки синхронизации.")
                     }
                 } catch (innerException: Exception) {
-                    Log.e(TAG, "Ошибка при проверке локального прогресса", innerException)
-                    loadMockProgress()
+                    Log.e(TAG, "Ошибка при проверке локального прогресса после основной ошибки", innerException)
                 }
             }
         }
