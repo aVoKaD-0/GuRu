@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_medium">
+
+    <!-- Данные профиля -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="@dimen/spacing_medium">
+
+        <ImageView
+            android:id="@+id/profile_avatar"
+            android:layout_width="@dimen/profile_avatar_size"
+            android:layout_height="@dimen/profile_avatar_size"
+            android:background="@drawable/circle_background"
+            android:contentDescription="Аватар профиля"
+            android:src="@drawable/ic_profile" />
+
+        <TextView
+            android:id="@+id/profile_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_medium"
+            android:text="Пользователь"
+            android:textSize="@dimen/text_size_title"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/profile_email"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_tiny"
+            android:textSize="@dimen/text_size_body"
+            android:textColor="?android:attr/textColorSecondary"
+            android:text="email@example.com" />
+    </LinearLayout>
+
+    <!-- Статистика пользователя -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:layout_marginBottom="@dimen/spacing_small"
+        android:text="Статистика"
+        android:textSize="@dimen/text_size_subhead"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textStyle="bold" />
+
+    <!-- Кнопка для перехода к статистике практики -->
+    <Button
+        android:id="@+id/btn_practice_statistics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Статистика практики"
+        android:textAllCaps="false"
+        android:layout_marginBottom="@dimen/spacing_medium" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_stats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+<!--    &lt;!&ndash; Синхронизация &ndash;&gt;-->
+<!--    <TextView-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:layout_marginTop="@dimen/spacing_medium"-->
+<!--        android:layout_marginBottom="@dimen/spacing_small"-->
+<!--        android:text="Синхронизация"-->
+<!--        android:textSize="@dimen/text_size_subhead"-->
+<!--        android:textColor="?android:attr/textColorPrimary"-->
+<!--        android:textStyle="bold" />-->
+
+<!--    &lt;!&ndash; Карточка статуса синхронизации &ndash;&gt;-->
+<!--    <include-->
+<!--        android:id="@+id/sync_status_card"-->
+<!--        layout="@layout/layout_sync_status" />-->
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_missions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <!-- Поддержка -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:layout_marginBottom="@dimen/spacing_small"
+        android:text="Техническая поддержка"
+        android:textSize="@dimen/text_size_subhead"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btn_support"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Связаться с поддержкой"
+        android:textAllCaps="false" />
+
+    <!-- Выход из аккаунта -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:layout_marginBottom="@dimen/spacing_small"
+        android:text="Выход из аккаунта"
+        android:textSize="@dimen/text_size_subhead"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textStyle="bold" />
+        
+    <Button
+        android:id="@+id/btn_logout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Выйти из аккаунта"
+        android:textAllCaps="false"
+        app:backgroundTint="@android:color/holo_red_light" />
+
+    <!-- Версия приложения -->
+    <TextView
+        android:id="@+id/app_version"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:layout_marginBottom="@dimen/spacing_large"
+        android:gravity="center"
+        android:text="Версия 1.0"
+        android:textSize="@dimen/text_size_caption"
+        android:textColor="?android:attr/textColorHint" />
+
+    <Button
+        android:id="@+id/btn_privacy_policy_profile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_small"
+        android:text="Политика конфиденциальности"
+        style="?attr/materialButtonOutlinedStyle"
+        android:textAllCaps="false" />
+        
+    <!-- Добавленное пространство для обеспечения прокрутки всего содержимого -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="40dp" />
+</LinearLayout> 
