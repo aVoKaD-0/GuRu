@@ -1,7 +1,7 @@
 package com.ruege.mobile.di
 
 import com.ruege.mobile.data.repository.ShpargalkaRepository
-import com.ruege.mobile.viewmodel.ShpargalkaViewModel
+import com.ruege.mobile.ui.viewmodel.ShpargalkaViewModel
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

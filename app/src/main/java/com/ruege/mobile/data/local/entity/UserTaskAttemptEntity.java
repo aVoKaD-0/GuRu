@@ -15,12 +15,6 @@ import androidx.room.Ignore;
             parentColumns = "user_id",
             childColumns = "user_id",
             onDelete = ForeignKey.CASCADE
-        ),
-        @ForeignKey(
-            entity = TaskEntity.class,
-            parentColumns = "id",
-            childColumns = "task_id",
-            onDelete = ForeignKey.CASCADE
         )
     },
     indices = {

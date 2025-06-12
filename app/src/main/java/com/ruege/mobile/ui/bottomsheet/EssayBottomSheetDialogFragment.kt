@@ -16,12 +16,10 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ruege.mobile.R
-// import com.ruege.mobile.data.network.dto.response.TheoryContentDto // Заменяем на EssayContentDto
 import com.ruege.mobile.ui.viewmodel.ContentViewModel
 import com.ruege.mobile.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 
-// Константы для аргументов и тега
 private const val ARG_CONTENT_ID = "content_id"
 private const val ARG_TITLE = "title"
 
@@ -30,20 +28,19 @@ class EssayBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     private val contentViewModel: ContentViewModel by activityViewModels()
 
-    // View элементы остаются теми же, если используется R.layout.bottom_sheet_theory
     private var titleTextView: TextView? = null
     private var contentWebView: WebView? = null
     private var progressBar: ProgressBar? = null
     private var errorTextView: TextView? = null
 
     private var contentId: String? = null
-    private var essayTitle: String? = null // Изменяем имя переменной
+    private var essayTitle: String? = null 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
             contentId = it.getString(ARG_CONTENT_ID)
-            essayTitle = it.getString(ARG_TITLE) // Изменяем имя переменной
+            essayTitle = it.getString(ARG_TITLE) 
         }
     }
 
@@ -52,28 +49,26 @@ class EssayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // Используем тот же layout, что и для теории
         return inflater.inflate(R.layout.bottom_sheet_theory, container, false)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // ID View остаются теми же, т.к. layout тот же
         titleTextView = view.findViewById(R.id.theory_bottom_sheet_title)
         contentWebView = view.findViewById(R.id.theory_bottom_sheet_webview)
         progressBar = view.findViewById(R.id.theory_bottom_sheet_progress)
         errorTextView = view.findViewById(R.id.theory_bottom_sheet_error)
 
-        titleTextView?.text = essayTitle ?: "Сочинение" // Обновляем заголовок по умолчанию
+        titleTextView?.text = essayTitle ?: "Сочинение" 
 
         setupWebView()
-        observeEssayContent() // Изменяем наблюдаемый метод
+        observeEssayContent() 
         observeErrorMessages()
 
         contentId?.let {
             Log.d(TAG_ESSAY_BS, "Загрузка сочинения для contentId: $it")
-            contentViewModel.loadEssayContent(it) // Вызываем метод загрузки сочинения
+            contentViewModel.loadEssayContent(it)
         } ?: run {
             Log.e(TAG_ESSAY_BS, "contentId is null, не могу загрузить сочинение")
             showError("ID контента не найден.")
@@ -83,17 +78,17 @@ class EssayBottomSheetDialogFragment : BottomSheetDialogFragment() {
     private fun setupWebView() {
         contentWebView?.settings?.apply {
             javaScriptEnabled = true
-            // Можно добавить другие настройки WebView при необходимости
         }
     }
 
-    private fun observeEssayContent() { // Наблюдаем за essayContent
+    private fun observeEssayContent() {
         contentViewModel.essayContent.observe(viewLifecycleOwner, Observer { essayContentDto ->
-            // Проверяем, что DTO не null и относится к текущему contentId
             if (essayContentDto != null && essayContentDto.id.toString() == contentId) {
                 val htmlContent = essayContentDto.content
                 if (!htmlContent.isNullOrEmpty()) {
-                    val styledHtml = (activity as? MainActivity)?.applyStylesToHtml(htmlContent, isDarkTheme())
+                    val mainActivity = activity as? MainActivity
+                    val currentDarkTheme = mainActivity?.isDarkThemeEnabled() ?: false
+                    val styledHtml = mainActivity?.applyStylesToHtml(htmlContent, currentDarkTheme)
                     contentWebView?.loadDataWithBaseURL(null, styledHtml ?: htmlContent, "text/html", "UTF-8", null)
                     showContent()
                     Log.d(TAG_ESSAY_BS, "Сочинение '${essayTitle}' загружено.")
@@ -133,10 +128,6 @@ class EssayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         contentWebView?.visibility = View.GONE
         errorTextView?.text = message
         errorTextView?.visibility = View.VISIBLE
-    }
-    
-    private fun isDarkTheme(): Boolean {
-        return (activity as? MainActivity)?.isDarkTheme() ?: false
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
@@ -178,7 +169,7 @@ class EssayBottomSheetDialogFragment : BottomSheetDialogFragment() {
     }
 
     companion object {
-        const val TAG_ESSAY_BS = "EssayBottomSheet" // Добавлено
+        const val TAG_ESSAY_BS = "EssayBottomSheet"
 
         @JvmStatic
         fun newInstance(contentId: String, title: String): EssayBottomSheetDialogFragment {

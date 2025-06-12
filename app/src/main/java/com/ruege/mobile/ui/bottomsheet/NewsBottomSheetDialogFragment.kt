@@ -33,7 +33,6 @@ class NewsBottomSheetDialogFragment : BottomSheetDialogFragment() {
     private var tvDate: TextView? = null
     private var tvDescription: TextView? = null
     private var ivImage: ImageView? = null
-    // private var progressBar: ProgressBar? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,8 +58,6 @@ class NewsBottomSheetDialogFragment : BottomSheetDialogFragment() {
         tvTitle = view.findViewById(R.id.news_bs_title)
         tvDate = view.findViewById(R.id.news_bs_date)
         tvDescription = view.findViewById(R.id.news_bs_description)
-//        ivImage = view.findViewById(R.id.news_bs_image)
-        // progressBar = view.findViewById(R.id.news_bs_progress_bar)
 
         tvTitle?.text = newsTitle ?: "Новость"
         tvDate?.text = newsDate ?: "Дата не указана"

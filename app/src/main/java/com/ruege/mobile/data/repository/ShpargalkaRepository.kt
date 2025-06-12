@@ -37,49 +37,16 @@ class ShpargalkaRepository @Inject constructor(
 ) {
     private val TAG = "ShpargalkaRepository"
     
-    // Для отслеживания ошибок
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
     
-    // Кэш для шпаргалок, чтобы не запрашивать их каждый раз
     private val _shpargalkaItems = MutableLiveData<List<ShpargalkaItem>>()
     val shpargalkaItems: LiveData<List<ShpargalkaItem>> = _shpargalkaItems
     
-    // Добавляем MutableLiveData для отслеживания ContentItems
     private val _contentItems = MutableLiveData<List<ContentItem>>()
     
-    // Получить список шпаргалок с сервера и сохранить в БД
     suspend fun fetchAndCacheShpargalkaItems() {
         try {
-            // Проверяем, есть ли уже данные в LiveData
-            if (!_shpargalkaItems.value.isNullOrEmpty()) {
-                Log.d(TAG, "Данные шпаргалок уже загружены, пропускаем запрос к API")
-                return
-            }
-            
-            // Проверяем, есть ли данные в базе данных
-            val existingContent = withContext(Dispatchers.IO) {
-                contentDao.getContentsByTypeSync("shpargalka")
-            }
-            
-            if (!existingContent.isNullOrEmpty()) {
-                Log.d(TAG, "Данные шпаргалок уже в БД, загружаем из локальной БД")
-                val items = existingContent.map { entity ->
-                    ShpargalkaItem(
-                        id = entity.orderPosition,
-                        title = entity.title,
-                        description = entity.description ?: "",
-                        groupId = entity.parentId ?: "shpargalki",
-                        groupTitle = "Шпаргалки",
-                        fileName = null,
-                        publishTime = null,
-                        isDownloaded = entity.isDownloaded
-                    )
-                }
-                _shpargalkaItems.postValue(items)
-                return
-            }
-            
             val response = shpargalkiApiService.getShpargalkaGroups()
             
             if (response.isSuccessful && response.body() != null) {
@@ -102,16 +69,15 @@ class ShpargalkaRepository @Inject constructor(
                     
                     val contentId = "shpargalka_$id"
                     
-                    // Создаем ContentEntity для сохранения в БД
                     contentEntities.add(ContentEntity.createForKotlin(
                         contentId,
                         title,
                         description,
                         "shpargalka",
-                        "shpargalki", // все шпаргалки относятся к одному родителю
+                        "shpargalki",
                         false,
                         false,
-                        id // используем id как порядковый номер
+                        id
                     ))
                     
                     items.add(ShpargalkaItem(
@@ -126,26 +92,23 @@ class ShpargalkaRepository @Inject constructor(
                     ))
                 }
                 
-                // Проверяем наличие родительской категории "shpargalki"
                 withContext(Dispatchers.IO) {
                     val categoryExists = categoryDao.getCategoryById("shpargalki").value != null
                     
                     if (!categoryExists) {
-                        // Создаем категорию "shpargalki", если её нет
                         val shpargalkiCategory = CategoryEntity(
                             "shpargalki",
                             "Шпаргалки",
                             "Полезные материалы для подготовки к ЕГЭ",
-                            "", // iconUrl - может быть пустым или указать URL иконки
-                            0, // orderPosition
-                            true // isVisible
+                            "",
+                            0,
+                            true
                         )
                         categoryDao.insert(shpargalkiCategory)
                         Log.d(TAG, "Создана категория 'shpargalki' в БД")
                     }
                 }
                 
-                // Проверяем, что данные действительно изменились перед сохранением в БД
                 val needUpdate = withContext(Dispatchers.IO) {
                     val existingIds = contentDao.getContentIdsByType("shpargalka")
                     val newIds = contentEntities.map { it.contentId }.toSet()
@@ -154,12 +117,10 @@ class ShpargalkaRepository @Inject constructor(
                 }
                 
                 if (needUpdate) {
-                    // Показываем сообщение о сохранении данных в БД
                     withContext(Dispatchers.IO) {
                         contentDao.insertAll(contentEntities)
                         Log.d(TAG, "Сохранено ${contentEntities.size} шпаргалок в БД")
                         
-                        // После сохранения в БД, также обновляем кэш ContentItems
                         val contentItems = contentEntities.map { entity ->
                             ContentItem(
                                 entity.contentId,
@@ -167,13 +128,12 @@ class ShpargalkaRepository @Inject constructor(
                                 entity.description ?: "",
                                 entity.type,
                                 entity.parentId ?: "",
-                                entity.isDownloaded
+                                entity.isDownloaded,
+                                false
                             )
                         }
                         
-                        // Обновляем LiveData с ContentItem напрямую
                         withContext(Dispatchers.Main) {
-                            // Обновляем существующий _contentItems вместо создания нового LiveData
                             _contentItems.value = contentItems
                             Log.d(TAG, "Обновлен кэш ContentItems с ${contentItems.size} элементами шпаргалок")
                         }
@@ -194,20 +154,16 @@ class ShpargalkaRepository @Inject constructor(
         }
     }
     
-    // Получение шпаргалок из локальной БД
     fun getShpargalkaContents(): LiveData<List<ContentItem>> {
-        // Заполняем кэш при первом обращении
         if (_contentItems.value == null || _contentItems.value?.isEmpty() == true) {
             refreshShpargalkaContentsInternal()
         }
         return _contentItems
     }
     
-    // Внутренний метод для обновления содержимого шпаргалок
     private fun refreshShpargalkaContentsInternal() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // Используем синхронный метод запроса, а не LiveData
                 val contentEntities = contentDao.getContentsByTypeSync("shpargalka")
                 
                 if (!contentEntities.isNullOrEmpty()) {
@@ -218,18 +174,16 @@ class ShpargalkaRepository @Inject constructor(
                             entity.description ?: "",
                             entity.type,
                             entity.parentId ?: "",
-                            entity.isDownloaded
+                            entity.isDownloaded,
+                            false
                         )
                     }
-                    // Используем postValue вместо value для обновления из фонового потока
                     _contentItems.postValue(items)
                     Log.d(TAG, "Загружено ${items.size} шпаргалок из БД для отображения")
                 } else {
                     Log.d(TAG, "Шпаргалки в БД не найдены, запускаем загрузку")
-                    // Если данных в БД нет, запускаем загрузку с сервера
                     fetchAndCacheShpargalkaItems()
                     
-                    // После загрузки с сервера пробуем еще раз получить данные из БД
                     val updatedEntities = contentDao.getContentsByTypeSync("shpargalka")
                     val updatedItems = updatedEntities.map { entity ->
                         ContentItem(
@@ -238,7 +192,8 @@ class ShpargalkaRepository @Inject constructor(
                             entity.description ?: "",
                             entity.type,
                             entity.parentId ?: "",
-                            entity.isDownloaded
+                            entity.isDownloaded,
+                            false
                         )
                     }
                     _contentItems.postValue(updatedItems)
@@ -252,23 +207,18 @@ class ShpargalkaRepository @Inject constructor(
         }
     }
     
-    // Метод для принудительного обновления данных шпаргалок из БД в LiveData
     fun refreshShpargalkaContents(): LiveData<List<ContentItem>> {
         Log.d(TAG, "Принудительное обновление данных шпаргалок из БД")
         
-        // Используем внутренний метод для обновления данных
         refreshShpargalkaContentsInternal()
         
-        // Возвращаем тот же LiveData, который используется в getShpargalkaContents
         return _contentItems
     }
     
-    // Загрузка PDF файла шпаргалки и сохранение его локально
     suspend fun downloadShpargalkaPdf(pdfId: Int): File? {
         try {
             Log.d(TAG, "Начинаем загрузку PDF с ID: $pdfId")
 
-            // Проверяем, не null ли наш сервис
             if (shpargalkiApiService == null) {
                 Log.e(TAG, "shpargalkiApiService IS NULL!")
                 _errorMessage.postValue("Ошибка: Сервис API не инициализирован.")
@@ -277,7 +227,7 @@ class ShpargalkaRepository @Inject constructor(
             Log.i(TAG, "shpargalkiApiService инстанс: $shpargalkiApiService")
 
             Log.i(TAG, "Вызов shpargalkiApiService.getShpargalkaPdf($pdfId)")
-            val response: Response<ResponseBody> // Объявляем переменную здесь
+            val response: Response<ResponseBody>
             try {
                 response = shpargalkiApiService.getShpargalkaPdf(pdfId)
                 Log.i(TAG, "Ответ от shpargalkiApiService.getShpargalkaPdf($pdfId): Успешно=${response.isSuccessful}, Код=${response.code()}, Тело пустое=${response.body() == null}")
@@ -294,33 +244,27 @@ class ShpargalkaRepository @Inject constructor(
                 
                 Log.d(TAG, "PDF загружен с сервера: Content-Type=$contentType, Content-Length=$contentLength байт")
                 
-                // Проверяем тип контента
                 if (contentType?.contains("application/pdf") != true) {
                     Log.e(TAG, "Неверный тип контента: $contentType, должен быть application/pdf")
                     _errorMessage.postValue("Ошибка: сервер вернул неверный тип файла")
                     return null
                 }
                 
-                // Создаем директорию для шпаргалок, если её нет
                 val shpargalkaDir = File(context.filesDir, "shpargalki")
                 if (!shpargalkaDir.exists()) {
                     val dirCreated = shpargalkaDir.mkdirs()
                     Log.d(TAG, "Директория для шпаргалок создана: $dirCreated")
                 }
                 
-                // Создаем файл для сохранения PDF
                 val pdfFile = File(shpargalkaDir, "shpargalka_$pdfId.pdf")
                 
-                // Записываем содержимое в файл
                 val success = writeResponseBodyToDisk(responseBody, pdfFile)
                 
                 if (success) {
                     val fileSize = pdfFile.length()
                     Log.d(TAG, "PDF файл успешно сохранен локально: ${pdfFile.absolutePath}, размер: $fileSize байт")
                     
-                    // Проверяем целостность PDF
                     if (isPdfValid(pdfFile)) {
-                        // Обновляем статус скачивания в БД
                         withContext(Dispatchers.IO) {
                             val contentId = "shpargalka_$pdfId"
                             contentDao.updateDownloadStatus(contentId, true)
@@ -328,10 +272,8 @@ class ShpargalkaRepository @Inject constructor(
                         }
                         return pdfFile
                     } else {
-                        // PDF поврежден или невалиден
                         Log.e(TAG, "PDF файл невалиден или поврежден")
                         _errorMessage.postValue("Ошибка: загруженный PDF-файл поврежден")
-                        // Удаляем поврежденный файл
                         val deleted = pdfFile.delete()
                         Log.d(TAG, "Поврежденный файл удален: $deleted")
                         return null
@@ -346,7 +288,6 @@ class ShpargalkaRepository @Inject constructor(
                 val errorMessage = response.message()
                 Log.e(TAG, "Ошибка загрузки PDF: $errorCode $errorMessage")
                 _errorMessage.postValue("Ошибка загрузки PDF: $errorCode $errorMessage")
-                // Добавляем лог здесь, если ответ не успешный
                 Log.e(TAG, "Полный ответ при ошибке: $response")
             }
         } catch (e: Exception) {
@@ -357,10 +298,8 @@ class ShpargalkaRepository @Inject constructor(
         return null
     }
     
-    // Проверка валидности PDF-файла
     private fun isPdfValid(file: File): Boolean {
         return try {
-            // Проверяем размер файла
             val fileSize = file.length()
             Log.d(TAG, "Проверка PDF файла, размер: $fileSize байт")
             
@@ -369,7 +308,6 @@ class ShpargalkaRepository @Inject constructor(
                 return false
             }
             
-            // Проверяем заголовок PDF
             val buffer = ByteArray(8)
             val inputStream = FileInputStream(file)
             val read = inputStream.read(buffer)
@@ -380,7 +318,6 @@ class ShpargalkaRepository @Inject constructor(
                 return false
             }
             
-            // Проверяем сигнатуру PDF файла (%PDF-)
             val header = String(buffer, 0, 5)
             val isValidHeader = header == "%PDF-"
             
@@ -397,7 +334,6 @@ class ShpargalkaRepository @Inject constructor(
         }
     }
     
-    // Получение ранее загруженного PDF файла
     fun getLocalPdfFile(pdfId: Int): File? {
         val shpargalkaDir = File(context.filesDir, "shpargalki")
         val pdfFile = File(shpargalkaDir, "shpargalka_$pdfId.pdf")
@@ -405,7 +341,6 @@ class ShpargalkaRepository @Inject constructor(
         return if (pdfFile.exists()) pdfFile else null
     }
     
-    // Проверка, скачан ли PDF файл
     fun isPdfDownloaded(pdfId: Int): Boolean {
         val shpargalkaDir = File(context.filesDir, "shpargalki")
         val pdfFile = File(shpargalkaDir, "shpargalka_$pdfId.pdf")
@@ -413,16 +348,13 @@ class ShpargalkaRepository @Inject constructor(
         return pdfFile.exists()
     }
     
-    // Запись содержимого ResponseBody в файл
     private fun writeResponseBodyToDisk(body: ResponseBody, file: File): Boolean {
         return try {
-            // Если файл уже существует, удаляем его
             if (file.exists()) {
                 val deleted = file.delete()
                 Log.d(TAG, "Существующий файл удален: $deleted")
             }
             
-            // Получаем размер содержимого
             val contentLength = body.contentLength()
             Log.d(TAG, "Начинаем запись файла. Размер содержимого: $contentLength байт")
             
@@ -441,7 +373,6 @@ class ShpargalkaRepository @Inject constructor(
                     outputStream.write(buffer, 0, bytesRead)
                     totalBytesRead += bytesRead
                     
-                    // Логируем прогресс загрузки для больших файлов
                     if (contentLength > 0 && totalBytesRead % (contentLength / 10) < 4096) {
                         val progress = (totalBytesRead * 100 / contentLength).toInt()
                         Log.d(TAG, "Прогресс записи файла: $progress%")
@@ -453,7 +384,6 @@ class ShpargalkaRepository @Inject constructor(
                 Log.d(TAG, "Файл успешно записан на диск: ${file.absolutePath}, размер: ${file.length()} байт")
                 true
             } finally {
-                // Гарантированно закрываем потоки
                 try {
                     inputStream?.close()
                 } catch (e: IOException) {
@@ -469,7 +399,6 @@ class ShpargalkaRepository @Inject constructor(
         } catch (e: IOException) {
             Log.e(TAG, "Ошибка при записи файла на диск", e)
             
-            // Удаляем частично записанный файл
             if (file.exists()) {
                 file.delete()
                 Log.d(TAG, "Частично записанный файл удален из-за ошибки")

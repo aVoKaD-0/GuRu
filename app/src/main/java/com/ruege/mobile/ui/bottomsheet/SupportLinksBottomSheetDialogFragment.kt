@@ -13,7 +13,7 @@ import com.google.android.material.button.MaterialButton
 class SupportLinksBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     private val websiteUrl = "https://guru.almaz.heloword.ru/"
-    private val telegramUrl = "https://t.me/GuRu_ege_official"
+    private val telegramUrl = "https://t.me/guru_ege"
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -45,7 +45,6 @@ class SupportLinksBottomSheetDialogFragment : BottomSheetDialogFragment() {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             startActivity(intent)
         } catch (e: Exception) {
-            // Можно добавить обработку ошибок, например, если нет браузера или Telegram
             android.widget.Toast.makeText(context, "Не удалось открыть ссылку", android.widget.Toast.LENGTH_SHORT).show()
         }
     }

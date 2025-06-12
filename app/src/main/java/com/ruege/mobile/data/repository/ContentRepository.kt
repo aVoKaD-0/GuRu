@@ -38,6 +38,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import com.ruege.mobile.model.ContentItem
+import com.ruege.mobile.data.local.dao.DownloadedTheoryDao
+import com.ruege.mobile.data.local.entity.DownloadedTheoryEntity
+import kotlinx.coroutines.flow.map
+import com.ruege.mobile.data.network.dto.response.TheorySummaryDto
+import kotlinx.coroutines.flow.flowOn
+import com.ruege.mobile.data.local.dao.TaskTextDao
+import com.ruege.mobile.data.local.entity.TaskTextEntity
 
 @Singleton
 class ContentRepository @Inject constructor(
@@ -46,12 +54,16 @@ class ContentRepository @Inject constructor(
     private val theoryApiService: TheoryApiService,
     private val taskApiService: TaskApiService,
     private val essayApiService: EssayApiService,
+    private val downloadedTheoryDao: DownloadedTheoryDao,
+    private val taskTextDao: TaskTextDao,
     private val externalScope: CoroutineScope
 ) {
 
     private val TAG = "ContentRepository"
     
-    // StateFlow для отслеживания загрузки контента
+    private val theoryTopicsCache = MutableStateFlow<List<TheorySummaryDto>>(emptyList())
+    private val taskTopicsCache = MutableStateFlow<List<ContentEntity>>(emptyList())
+    
     private val _theoryContentLoaded = MutableStateFlow(false)
     private val _essayContentLoaded = MutableStateFlow(false)
     private val _tasksContentLoaded = MutableStateFlow(false)
@@ -64,33 +76,55 @@ class ContentRepository @Inject constructor(
         theoryLoaded && essayLoaded && tasksLoaded
     }.stateIn(
         scope = externalScope,
-        started = SharingStarted.Lazily,
+        started = SharingStarted.WhileSubscribed(5000),
         initialValue = false
     )
     
-    // Срок действия кэша в миллисекундах (24 часа)
+    private val theoryContentCache = mutableMapOf<String, TheoryContentDto>()
+    private val essayContentCache = mutableMapOf<String, EssayContentDto>()
+    private val taskTextCache = mutableMapOf<String, String>()
+    
     private val CACHE_EXPIRATION_TIME = 24 * 60 * 60 * 1000L
     
-    // Список категорий заданий, которые уже были обновлены в текущей сессии
     private val updatedTaskCategories = mutableSetOf<String>()
     
-    // Кэш заданий по категориям для избежания повторных запросов
     private val tasksCategoryCache = mutableMapOf<String, List<TaskItem>>()
     
-    // Время последней загрузки заданий каждой категории (в миллисекундах)
     private val tasksCacheTimestamps = mutableMapOf<String, Long>()
+
+    private val taskDetailCache = mutableMapOf<Int, TaskItem>()
 
     companion object {
         const val NO_DATA_AND_NETWORK_ISSUE_FLAG = "NO_DATA_AND_NETWORK_ISSUE"
+    }
+
+    private fun logCacheContents(categoryId: String) {
+        val cachedTasks = tasksCategoryCache[categoryId]
+        if (cachedTasks != null) {
+            Timber.d("--- Проверка кэша для категории '$categoryId' ---")
+            cachedTasks.forEachIndexed { index, task ->
+                val contentPreview = task.content.take(80).replace("\n", " ")
+                Timber.d("  #${index + 1}: TaskId=${task.taskId}, TextId=${task.textId}, IsSolved=${task.isSolved}, Content='${contentPreview}...'")
+            }
+            Timber.d("--- Конец проверки кэша для категории '$categoryId' ---")
+        } else {
+            Timber.d("Кеш для категории '$categoryId' пуст.")
+        }
     }
 
     /**
      * Получает поток списка тем теории из локальной БД.
      */
     fun getTheoryTopicsStream(): Flow<List<ContentEntity>> {
-        Log.d(TAG, "Getting theory topics stream from DAO")
-        // Используем LiveData.asFlow() для преобразования
-        return contentDao.getContentsByType("theory").asFlow()
+        Log.d(TAG, "Getting theory topics stream from cache")
+        return theoryTopicsCache.combine(downloadedTheoryDao.getAllIdsAsFlow()) { dtos, downloadedIds ->
+            val downloadedIdsSet = downloadedIds.toSet()
+            dtos.map { dto ->
+                dto.toContentEntity().apply {
+                    this.isDownloaded = downloadedIdsSet.contains(this.contentId)
+                }
+            }
+        }
     }
 
     /**
@@ -105,14 +139,22 @@ class ContentRepository @Inject constructor(
      * Получает поток списка заданий из локальной БД.
      */
     fun getTasksTopicsStream(): Flow<List<ContentEntity>> {
-        Timber.d("Getting tasks topics stream from DAO")
-        // Используем LiveData.asFlow() для преобразования
-        return contentDao.getContentsByType("task_group").asFlow()
+        Timber.d("Getting tasks topics stream from cache and combining with DB status")
+        return taskTopicsCache.combine(taskDao.getDownloadedEgeNumbersStream()) { cachedGroups, downloadedEgeNumbers ->
+            val downloadedSet = downloadedEgeNumbers.toSet()
+            cachedGroups.map { group ->
+                val egeNumber = group.contentId.removePrefix("task_group_")
+                group.apply {
+                    this.isDownloaded = downloadedSet.contains(egeNumber)
+                }
+            }
+        }
     }
 
     /**
      * Запрашивает список тем теории с сервера и сохраняет в БД.
      * Добавляет новые элементы и обновляет существующие.
+     * Загрузка происходит только если в БД нет данных по теории.
      */
     suspend fun refreshTheoryTopics() {
         withContext(Dispatchers.IO) {
@@ -122,51 +164,33 @@ class ContentRepository @Inject constructor(
 
                 if (response.isSuccessful && response.body() != null) {
                     val theorySummaries = response.body()!!
-                    
-                    // Получаем список уже существующих элементов ТЕОРИИ из БД
-                    val existingContentIds = contentDao.getContentsByTypeSync("theory").map { it.contentId }.toSet()
-                    
-                    // Преобразуем все записи в ContentEntity
-                    val allContentEntities = theorySummaries.map { dto -> 
-                        val entity = dto.toContentEntity()
-                        // Устанавливаем признак загруженности
-                        entity.setDownloaded(true)
-                        entity
-                    }
-                    
-                    // Разделяем на новые и существующие записи
-                    val newContentEntities = allContentEntities.filter { !existingContentIds.contains(it.contentId) }
-                    val existingContentEntities = allContentEntities.filter { existingContentIds.contains(it.contentId) }
-                    
-                    // Обновляем существующие записи
-                    if (existingContentEntities.isNotEmpty()) {
-                        Log.d(TAG, "Updating ${existingContentEntities.size} existing theory topics in database")
-                        contentDao.updateAll(existingContentEntities)
-                        Log.d(TAG, "Successfully updated existing theory topics")
-                    }
-                    
-                    // Добавляем новые записи
-                    if (newContentEntities.isNotEmpty()) {
-                        Log.d(TAG, "Adding ${newContentEntities.size} new theory topics to database")
-                        contentDao.insertAll(newContentEntities)
-                        Log.d(TAG, "Successfully added new theory topics")
-                    }
-                    
-                    Log.d(TAG, "Successfully refreshed theory topics from network: ${existingContentEntities.size} updated, ${newContentEntities.size} added")
-                    _theoryContentLoaded.value = true
+                    theoryTopicsCache.value = theorySummaries
+                    Log.d(TAG, "Successfully refreshed and cached ${theorySummaries.size} theory topics from network")
                 } else {
                     Log.w(TAG, "Failed to refresh theory topics. Code: ${response.code()}")
-                    // Можно добавить обработку ошибок, например, показать сообщение пользователю
+                    if (theoryTopicsCache.value.isNotEmpty()) {
+                        Log.d(TAG, "Using existing theory topics from cache (${theoryTopicsCache.value.size} items)")
+                    } else {
+                        Log.w(TAG, "No existing theory topics in cache")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing theory topics", e)
-                // Обработка исключений (например, нет сети)
+                if (theoryTopicsCache.value.isNotEmpty()) {
+                    Log.d(TAG, "Using existing theory topics from cache after error (${theoryTopicsCache.value.size} items)")
+                } else {
+                    Log.w(TAG, "No existing theory topics in cache after error")
+                }
+            } finally {
+                _theoryContentLoaded.value = true
             }
         }
     }
 
     /**
      * Запрашивает список тем сочинений с сервера и сохраняет в БД.
+     * Добавляет новые элементы и обновляет существующие.
+     * Загрузка происходит только если в БД нет данных по сочинениям.
      */
     suspend fun refreshEssayTopics() {
         withContext(Dispatchers.IO) {
@@ -177,37 +201,33 @@ class ContentRepository @Inject constructor(
                 if (response.isSuccessful && response.body() != null) {
                     val essaySummaries = response.body()!!
                     
-                    // Получаем существующие ID сочинений
-                    val existingContentIds = contentDao.getContentsByTypeSync("essay").map { it.contentId }.toSet()
-                    
                     val allContentEntities = essaySummaries.map { dto -> 
                         val entity = dto.toContentEntity()
-                        entity.setDownloaded(true)
+                        entity.setDownloaded(false)
                         entity
                     }
                     
-                    val newContentEntities = allContentEntities.filter { !existingContentIds.contains(it.contentId) }
-                    val existingContentEntities = allContentEntities.filter { existingContentIds.contains(it.contentId) }
-                    
-                    if (existingContentEntities.isNotEmpty()) {
-                        Log.d(TAG, "Updating ${existingContentEntities.size} existing essay topics in database")
-                        contentDao.updateAll(existingContentEntities)
-                        Log.d(TAG, "Successfully updated existing essay topics")
-                    }
-                    
-                    if (newContentEntities.isNotEmpty()) {
-                        Log.d(TAG, "Adding ${newContentEntities.size} new essay topics to database")
-                        contentDao.insertAll(newContentEntities)
-                        Log.d(TAG, "Successfully added new essay topics")
-                    }
-                    
-                    Log.d(TAG, "Successfully refreshed essay topics from network: ${existingContentEntities.size} updated, ${newContentEntities.size} added")
-                    _essayContentLoaded.value = true
+                    contentDao.insertAll(allContentEntities)
+                    Log.d(TAG, "Successfully refreshed and saved ${allContentEntities.size} essay topics from network to DB")
                 } else {
                     Log.w(TAG, "Failed to refresh essay topics. Code: ${response.code()}")
+                    val existingEssays = contentDao.getContentsByTypeSync("essay")
+                    if (existingEssays.isNotEmpty()) {
+                        Log.d(TAG, "Using existing essay topics from DB (${existingEssays.size} items)")
+                    } else {
+                        Log.w(TAG, "No existing essay topics in DB")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing essay topics", e)
+                val existingEssays = contentDao.getContentsByTypeSync("essay")
+                if (existingEssays.isNotEmpty()) {
+                    Log.d(TAG, "Using existing essay topics from DB after error (${existingEssays.size} items)")
+                } else {
+                    Log.w(TAG, "No existing essay topics in DB after error")
+                }
+            } finally {
+                _essayContentLoaded.value = true
             }
         }
     }
@@ -215,24 +235,19 @@ class ContentRepository @Inject constructor(
     /**
      * Запрашивает список заданий с сервера и сохраняет в БД.
      * Добавляет новые элементы и обновляет существующие.
+     * Загрузка происходит только если в БД нет групп заданий.
      */
     suspend fun refreshTasksTopics() {
         withContext(Dispatchers.IO) {
             try {
                 Timber.d("Refreshing tasks topics from network...")
-                
-                // Получаем группы заданий ЕГЭ
+
                 val response = taskApiService.getAllTasks()
-                
+
                 if (response.isSuccessful && response.body() != null) {
                     val taskGroups = response.body()!!
                     val newTasksEntities = mutableListOf<ContentEntity>()
-                    val existingTasksEntities = mutableListOf<ContentEntity>()
-                    
-                    // Получаем список уже существующих элементов из БД
-                    val existingContentIds = contentDao.getAllProgressContentIds().toSet()
-                    
-                    // Создаем ContentEntity для каждой группы заданий
+
                     for (group in taskGroups) {
                         val egeNumber = group["ege_number"] as? String ?: continue
                         val title = group["title"] as? String ?: "Задание $egeNumber"
@@ -242,83 +257,76 @@ class ContentRepository @Inject constructor(
                             is String -> count.toIntOrNull() ?: 0
                             else -> 0
                         }
-                        
-                        // Используем egeNumber как contentId, чтобы избежать дублирования
+
                         val contentId = "task_group_$egeNumber"
-                        
-                        // Создаем ContentEntity для группы заданий
-                        val entity = ContentEntity().apply { 
+
+                        val downloadedCount = taskDao.getTaskCountByEgeNumberSync(egeNumber)
+                        val isDownloaded = downloadedCount > 0
+
+                        val entity = ContentEntity().apply {
                             setContentId(contentId)
                             setTitle(title)
                             setType("task_group")
-                            
-                            // Используем номер задания ЕГЭ для порядка, преобразуя его в число
+
                             val orderPosition = try {
                                 egeNumber.toInt()
                             } catch (e: NumberFormatException) {
-                                1 // По умолчанию, если не удалось преобразовать
+                                1
                             }
                             setOrderPosition(orderPosition)
-                            
-                            // Устанавливаем описание с количеством заданий
-                            setDescription("$countValue заданий")
-                            
-                            // Устанавливаем признак загруженности
-                            setDownloaded(true)
-                        }
-                        
-                        // Проверяем, существует ли уже такой элемент
-                        if (existingContentIds.contains(contentId)) {
-                            existingTasksEntities.add(entity)
-                        } else {
-                            newTasksEntities.add(entity)
-                        }
-                    }
-                    
-                    // Обновляем существующие записи
-                    if (existingTasksEntities.isNotEmpty()) {
-                        Timber.d("Updating ${existingTasksEntities.size} existing task groups in database")
-                        contentDao.updateAll(existingTasksEntities)
-                        Timber.d("Successfully updated existing task groups")
-                    }
-                    
-                    // Добавляем новые записи
-                    if (newTasksEntities.isNotEmpty()) {
-                        Timber.d("Adding ${newTasksEntities.size} new task groups to database")
-                        contentDao.insertAll(newTasksEntities)
-                        Timber.d("Successfully added new task groups")
-                    }
-                    
-                    Timber.d("Successfully refreshed task groups from network: ${existingTasksEntities.size} updated, ${newTasksEntities.size} added")
-                    _tasksContentLoaded.value = true
 
-                    // После успешной загрузки всех групп заданий, нормализуем количество
-                    normalizeAllTaskCounts()
+                            setDescription("$countValue заданий")
+
+                            setDownloaded(isDownloaded)
+                        }
+
+                        newTasksEntities.add(entity)
+                    }
+
+                    taskTopicsCache.value = newTasksEntities
+                    Timber.d("Successfully refreshed and cached ${newTasksEntities.size} task groups from network")
                 } else {
                     Timber.w("Failed to refresh task group topics. Code: ${response.code()}")
+                    if (taskTopicsCache.value.isNotEmpty()) {
+                        Timber.d("Using existing task groups from cache (${taskTopicsCache.value.size} items)")
+                    } else {
+                        Timber.w("No existing task groups in cache")
+                    }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error refreshing task topics")
+                if (taskTopicsCache.value.isNotEmpty()) {
+                    Timber.d("Using existing task groups from cache after error (${taskTopicsCache.value.size} items)")
+                } else {
+                    Timber.w("No existing task groups in cache after error")
+                }
+            } finally {
+                _tasksContentLoaded.value = true
             }
         }
     }
 
     /**
      * Получает содержимое конкретной теории по ID.
-     * В этой версии используем сетевой запрос без кэширования.
+     * Сначала проверяет кэш в памяти, затем запрашивает с сервера.
      * @param contentId ID теории
      * @return Объект TheoryContentDto с содержимым или null в случае ошибки
      */
     suspend fun getTheoryContentById(contentId: String): TheoryContentDto? {
+        if (theoryContentCache.containsKey(contentId)) {
+            Log.d(TAG, "Getting theory content from memory cache for ID: $contentId")
+            return theoryContentCache[contentId]
+        }
+
         return withContext(Dispatchers.IO) {
             try {
-                // Запрашиваем с сервера
                 Log.d(TAG, "Getting theory content from network for ID: $contentId")
                 val response = theoryApiService.getTheoryContent(contentId)
                 
                 if (response.isSuccessful && response.body() != null) {
                     val theoryContent = response.body()!!
-                    Log.d(TAG, "Successfully loaded theory content from network")
+                    Log.d(TAG, "Successfully loaded theory content from network, caching result.")
+                    theoryContentCache[contentId] = theoryContent
                     return@withContext theoryContent
                 } else {
                     Log.w(TAG, "Failed to load theory content from network. Code: ${response.code()}")
@@ -333,10 +341,16 @@ class ContentRepository @Inject constructor(
 
     /**
      * Получает содержимое конкретного сочинения по ID.
+     * Сначала проверяет кэш в памяти, затем запрашивает с сервера.
      * @param contentId ID сочинения
      * @return Объект EssayContentDto с содержимым или null в случае ошибки
      */
     suspend fun getEssayContentById(contentId: String): EssayContentDto? {
+        if (essayContentCache.containsKey(contentId)) {
+            Log.d(TAG, "Getting essay content from memory cache for ID: $contentId")
+            return essayContentCache[contentId]
+        }
+
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Getting essay content from network for ID: $contentId")
@@ -344,7 +358,8 @@ class ContentRepository @Inject constructor(
                 
                 if (response.isSuccessful && response.body() != null) {
                     val essayContent = response.body()!!
-                    Log.d(TAG, "Successfully loaded essay content from network")
+                    Log.d(TAG, "Successfully loaded essay content from network, caching result.")
+                    essayContentCache[contentId] = essayContent
                     return@withContext essayContent
                 } else {
                     Log.w(TAG, "Failed to load essay content from network. Code: ${response.code()}")
@@ -359,203 +374,83 @@ class ContentRepository @Inject constructor(
 
     /**
      * Получает список заданий по категории ЕГЭ.
-     * При первом обращении к категории в рамках сессии всегда запрашивает обновление с сервера.
-     * Для последующих обращений сначала проверяет локальную БД, затем сервер.
+     * Реализует простую стратегию кэширования на время сессии: при первом обращении к категории
+     * данные обновляются с сервера, при последующих - берутся из локальной БД.
+     * Для пагинации (page > 1) всегда идет запрос на сервер.
      */
     fun getTasksByCategory(categoryId: String, page: Int = 1, pageSize: Int = 20): Flow<Result<List<TaskItem>>> = flow {
-        // Извлекаем чистый ID категории (например, "1" из "task_group_1")
-        // Эта логика уже должна быть здесь или в вызывающем коде (ViewModel)
-        // Убедимся, что работаем с чистым ID для API
         val actualCategoryId = categoryId.replace("task_group_", "")
-        Timber.d("Запрос заданий для категории: $categoryId (actual ID for API: $actualCategoryId), страница: $page")
+        Timber.d("Запрос заданий для категории: $categoryId (ID для API: $actualCategoryId), страница: $page")
 
-        // Проверка, является ли actualCategoryId числом
+        if (page == 1 && tasksCategoryCache.containsKey(actualCategoryId)) {
+            Timber.d("Категория $actualCategoryId найдена в кэше. Возвращаем ${tasksCategoryCache[actualCategoryId]?.size} заданий.")
+            emit(Result.Success(tasksCategoryCache[actualCategoryId]!!))
+            return@flow
+        }
+
+        if (page == 1) {
+            val localTasks = withContext(Dispatchers.IO) { taskDao.getTasksByEgeNumberSync(actualCategoryId) }
+            if (localTasks.isNotEmpty()) {
+                Timber.d("Найдено ${localTasks.size} скачанных заданий в БД для категории $actualCategoryId. Пагинация для этой категории будет отключена.")
+                val taskItems = localTasks.map { it.toTaskItem() }
+                tasksCategoryCache[actualCategoryId] = taskItems
+                hasMoreItemsMap[actualCategoryId] = false
+                emit(Result.Success(taskItems))
+                return@flow
+            }
+        }
+        
         if (!actualCategoryId.all { it.isDigit() }) {
-            Timber.e("Некорректный actualCategoryId для API: $actualCategoryId. Ожидался числовой ID.")
+            Timber.e("Некорректный ID категории для API: $actualCategoryId")
             emit(Result.Failure(IllegalArgumentException("Некорректный ID категории для API: $actualCategoryId")))
             return@flow
         }
         
-        var tasksFromDb: List<com.ruege.mobile.data.local.entity.TaskEntity>? = null
-        val isFirstAccess = !updatedTaskCategories.contains(categoryId) // Проверяем для categoryId (e.g., "task_group_1")
-        var shouldFetchFromServer = isFirstAccess 
-        Timber.d("Для категории $categoryId: isFirstAccess = $isFirstAccess, начальное shouldFetchFromServer = $shouldFetchFromServer")
-        
-        // Сначала пытаемся загрузить из локальной БД, если это первая страница
-        if (page == 1) { // Логично проверять БД только для первой страницы
-            try {
-                tasksFromDb = withContext(Dispatchers.IO) { 
-                    taskDao.getTasksByEgeNumberSync(actualCategoryId)
-                }
-                Timber.d("Прочитано из БД для EGE $actualCategoryId: ${tasksFromDb?.size ?: "null"} заданий.")
-                
-                // Если локальная БД пуста, нужно загрузить с сервера в любом случае
-                if (tasksFromDb.isNullOrEmpty()) {
-                    shouldFetchFromServer = true
-                    Timber.d("Локальных данных нет, shouldFetchFromServer = true")
-                } else if (!isFirstAccess) {
-                    // Локальные данные есть, и это не первый доступ, можем отдать и не ходить на сервер (если не хотим принудительного обновления)
-                    // В текущей логике, если !isFirstAccess, то shouldFetchFromServer уже false.
-                    // Можно добавить флаг принудительного обновления, если потребуется.
-                    Timber.d("Локальные данные есть, не первый доступ.")
-                }
-            } catch (e: Exception) {
-                Timber.w(e, "Ошибка при доступе к БД для EGE $actualCategoryId. Загружаем с сервера.")
-                shouldFetchFromServer = true
-            }
-        } else {
-            // Для последующих страниц всегда идем на сервер
-            shouldFetchFromServer = true
-            Timber.d("Запрос не первой страницы ($page), shouldFetchFromServer = true")
-        }
+        Timber.d("Требуется загрузка с сервера для категории $categoryId. page=$page")
+        try {
+            val response = taskApiService.getTasksByEgeNumberPaginated(actualCategoryId, limit = pageSize, pageNumber = page)
+            if (response.isSuccessful) {
+                val responseBody = response.body()
+                val taskDtos = responseBody?.tasks ?: emptyList()
+                Timber.d("С сервера для EGE $actualCategoryId получено ${taskDtos.size} заданий.")
 
-        // Шаг 2: Сначала возвращаем локальные данные, если они есть и НЕ нужно идти на сервер
-        // (Эта логика была немного запутана, упрощаем)
-        if (!shouldFetchFromServer && tasksFromDb != null && !tasksFromDb.isEmpty()) {
-            Timber.d("Используем только локальные данные для $categoryId (не первая страница или не первый доступ с данными в кеше)")
-            val taskItems = tasksFromDb.map { it.toTaskItem() }
-            emit(Result.Success(taskItems))
-            return@flow 
-        }
-
-        // Шаг 3: Загружаем данные с сервера (при первом доступе или если локальных данных нет, или не первая страница)
-        if (shouldFetchFromServer) {
-            try {
-                Timber.d("Загрузка заданий для EGE $actualCategoryId с сервера.")
-                val response = taskApiService.getTasksByEgeNumberPaginated(actualCategoryId, limit = pageSize, pageNumber = page)
-                if (response.isSuccessful) {
-                    val taskDtos = response.body() ?: emptyList()
-                    
-                    if (taskDtos.isNotEmpty()) {
-                        // Преобразуем DTO в сущности для сохранения в БД
-                        val taskEntities = taskDtos.map { it.toEntity() }
-                        
-                        // Сохраняем в базу данных
-                        withContext(Dispatchers.IO) {
-                            try {
-                                Timber.d("Сохранение ${taskEntities.size} заданий в БД для EGE $actualCategoryId...")
-                                
-                                // Если это первый доступ, удаляем старые данные перед вставкой новых
-                                if (shouldFetchFromServer && tasksFromDb != null && tasksFromDb.isNotEmpty()) {
-                                    Timber.d("Удаление старых заданий для EGE $actualCategoryId...")
-                                    taskDao.deleteByEgeNumber(actualCategoryId)
-                                }
-                                
-                                // Вставляем новые данные
-                                taskDao.insertAll(taskEntities)
-                                
-                                // Помечаем категорию как обновленную в текущей сессии
-                                updatedTaskCategories.add(categoryId)
-                                
-                                // Обновляем соответствующую запись ContentEntity для отображения актуального количества заданий
-                                if (shouldFetchFromServer) {
-                                    try {
-                                        val contentId = "task_group_$actualCategoryId"
-                                        val contentEntity = contentDao.getContentByIdSync(contentId)
-                                        if (contentEntity != null) {
-                                            Timber.d("[COUNT_DEBUG] Существующее описание для группы $actualCategoryId: ${contentEntity.getDescription()}")
-                                            
-                                            // Проверяем, содержит ли описание информацию о количестве заданий
-                                            val currentDescription = contentEntity.getDescription() ?: ""
-                                            val hasTaskCount = currentDescription.contains("заданий") || currentDescription.contains("задание")
-                                            
-                                            if (hasTaskCount) {
-                                                // Если описание уже содержит информацию о количестве - сохраняем его
-                                                Timber.d("[COUNT_DEBUG] Сохраняем существующее описание о количестве заданий: $currentDescription")
-                                                contentDao.updateDownloadStatus(contentId, true)
-                                            } else {
-                                                // Если описание не содержит информацию о количестве - обновляем его
-                                                Timber.d("[COUNT_DEBUG] Описание не содержит информацию о количестве заданий, устанавливаем новое: ${taskEntities.size} заданий")
-                                                contentDao.updateDownloadStatusAndDescription(contentId, true, "${taskEntities.size} заданий")
-                                            }
-                                            Timber.d("[COUNT_DEBUG] Обновлена запись ContentEntity для группы $actualCategoryId")
-                                        } else {
-                                            // Если запись ContentEntity не найдена, создаем новую
-                                            Timber.d("[COUNT_DEBUG] Создаем новую запись ContentEntity для группы $actualCategoryId: ${taskEntities.size} заданий")
-                                            val newContentEntity = ContentEntity().apply {
-                                                setContentId("task_group_$actualCategoryId")
-                                                setTitle("Задание $actualCategoryId")
-                                                setType("task_group")
-                                                setOrderPosition(actualCategoryId.toIntOrNull() ?: 0)
-                                                setDescription("${taskEntities.size} заданий")
-                                                setDownloaded(true)
-                                            }
-                                            contentDao.insert(newContentEntity)
-                                            Timber.d("[COUNT_DEBUG] Создана новая запись ContentEntity для группы $actualCategoryId: ${taskEntities.size} заданий")
-                                        }
-                                    } catch (contentException: Exception) {
-                                        Timber.e(contentException, "[COUNT_DEBUG] Ошибка при обновлении ContentEntity для группы $actualCategoryId")
-                                    }
-                                } else {
-                                    Timber.d("[COUNT_DEBUG] Пропускаем обновление описания ContentEntity для $actualCategoryId - не первый доступ")
-                                }
-                                
-                                Timber.d("Успешно сохранено ${taskEntities.size} заданий, категория $categoryId отмечена как обновленная")
-                            } catch (dbException: Exception) {
-                                Timber.e(dbException, "!!! Ошибка БД при сохранении заданий для EGE $actualCategoryId")
-                            }
-                        }
-                        
-                        // Преобразуем DTO в TaskItem для отображения
-                        val finalTaskItems = taskDtos.map { taskDto ->
-                            TaskItem(
-                                taskId = taskDto.id.toString(),
-                                title = "Задание ${taskDto.egeNumber}",
-                                egeTaskNumber = taskDto.egeNumber,
-                                description = taskDto.taskText ?: "",
-                                content = taskDto.taskText ?: "",
-                                answerType = AnswerType.TEXT, 
-                                maxPoints = 1, 
-                                timeLimit = 0, 
-                                solutions = null,
-                                correctAnswer = taskDto.solution,
-                                explanation = taskDto.explanation,
-                                textId = taskDto.textId
-                            )
-                        }
-                        
-                        // Отправляем результат
-                        emit(Result.Success(finalTaskItems))
-                        Timber.d("Успешно загружено и смаплено ${finalTaskItems.size} заданий с сервера.")
-                        
-                        // Обновляем кэш категорий
-                        tasksCategoryCache[categoryId] = finalTaskItems
-                        tasksCacheTimestamps[categoryId] = System.currentTimeMillis()
-                    } else if (tasksFromDb != null && tasksFromDb.isNotEmpty()) {
-                        // Если с сервера пришел пустой список, но у нас есть локальные данные - используем их
-                        Timber.d("Сервер вернул пустой список заданий, используем ${tasksFromDb.size} локальных заданий")
-                        val taskItems = tasksFromDb.map { it.toTaskItem() }
-                        emit(Result.Success(taskItems))
-                    } else {
-                        // И с сервера пусто, и локально ничего нет
-                        Timber.w("Сервер вернул пустой список заданий, и локальных данных нет.")
-                        emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
-                    }
-                } else {
-                    // Ошибка запроса к серверу
-                    Timber.w("Не удалось загрузить задания с сервера (Код: ${response.code()}).")
-                    
-                    // Если есть локальные данные - используем их
-                    if (tasksFromDb != null && tasksFromDb.isNotEmpty()) {
-                        Timber.d("Используем ${tasksFromDb.size} локальных заданий из-за ошибки сервера")
-                        val taskItems = tasksFromDb.map { it.toTaskItem() }
-                        emit(Result.Success(taskItems))
-                    } else {
-                        // Нет ни локальных данных, ни данных с сервера
-                        emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
-                    }
+                if (page == 1) {
+                    hasMoreItemsMap[actualCategoryId] = taskDtos.size >= pageSize
                 }
-            } catch (e: Exception) { 
-                Timber.e(e, "Ошибка сети при получении заданий с сервера.")
-                
-                // Если есть локальные данные - используем их в случае сетевой ошибки
-                if (tasksFromDb != null && tasksFromDb.isNotEmpty()) {
-                    Timber.d("Используем ${tasksFromDb.size} локальных заданий из-за ошибки сети")
-                    val taskItems = tasksFromDb.map { it.toTaskItem() }
+
+                if (taskDtos.isNotEmpty()) {
+                    val taskItems = taskDtos.map { it.toTaskItem() }
+                    
+                    if (page == 1) {
+                        tasksCategoryCache[actualCategoryId] = taskItems
+                    }
+                    
                     emit(Result.Success(taskItems))
+                } else {
+                    val localTasks = withContext(Dispatchers.IO) { taskDao.getTasksByEgeNumberSync(actualCategoryId) }
+                    if (page == 1 && localTasks.isEmpty()) {
+                         Timber.w("Сервер вернул пустой список, и локальных данных нет для $categoryId.")
+                         emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
+                    } else {
+                         emit(Result.Success(emptyList()))
+                    }
+                }
+            } else {
+                Timber.w("Ошибка сервера при загрузке заданий для $categoryId: ${response.code()}. Используем локальные данные, если есть.")
+                val localTasks = withContext(Dispatchers.IO) { taskDao.getTasksByEgeNumberSync(actualCategoryId) }
+                if (localTasks.isNotEmpty() && page == 1) {
+                    emit(Result.Success(localTasks.map { it.toTaskItem() }))
                 } else {
                     emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
                 }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Ошибка сети при загрузке заданий для $categoryId. Используем локальные данные, если есть.")
+            val localTasks = withContext(Dispatchers.IO) { taskDao.getTasksByEgeNumberSync(actualCategoryId) }
+            if (localTasks.isNotEmpty() && page == 1) {
+                emit(Result.Success(localTasks.map { it.toTaskItem() }))
+            } else {
+                emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
             }
         }
     }
@@ -567,173 +462,50 @@ class ContentRepository @Inject constructor(
      */
     fun getTaskDetail(taskIdString: String): Flow<Result<TaskItem>> = flow {
         Timber.d("Запрос деталей задания ID: $taskIdString")
-        var dbFetchAttempted = false
-        var taskEntity: com.ruege.mobile.data.local.entity.TaskEntity? = null
-        var taskIdInt = -1
-        
-        // Проверяем, является ли это первое обращение к заданию в текущей сессии
-        try {
-            // Проверяем, содержит ли ID задания только цифры
-            val isNumeric = taskIdString.all { it.isDigit() }
-            if (!isNumeric) {
-                Timber.e("ID задания не числовой: $taskIdString - требуется только числовой ID")
-                emit(Result.Failure(IllegalArgumentException("ID задания должен быть числовым: $taskIdString")))
-                return@flow
-            }
-            
-            taskIdInt = taskIdString.toInt()
-            Timber.d("ID задания преобразован в число: $taskIdInt")
+
+        val taskIdInt = try {
+            taskIdString.toInt()
         } catch (e: NumberFormatException) {
             Timber.e(e, "Неверный формат ID задания: $taskIdString")
             emit(Result.Failure(IllegalArgumentException("Неверный формат ID задания: $taskIdString")))
             return@flow
         }
-        
-        // Создаем уникальный ключ для этого задания (отличный от ключа категории)
-        val taskKey = -taskIdInt // Используем отрицательное значение, чтобы отличать от ID категорий
-        val isFirstAccess = !updatedTaskCategories.contains<String>(taskKey.toString())
-        Timber.d("Запрос детального задания ID: $taskIdString, первое обращение: $isFirstAccess")
-        
-        var shouldFetchFromServer = isFirstAccess
 
-        // Шаг 1: Загружаем данные из локальной БД
-        try {
-            dbFetchAttempted = true
-            taskEntity = withContext(Dispatchers.IO) { 
-                taskDao.getTaskByIdSync(taskIdInt)
-            }
-            Timber.d("Прочитано из БД для ID $taskIdInt: ${if(taskEntity != null) "Найдено" else "null"}.")
-            
-            // Если локальная БД пуста, нужно загрузить с сервера в любом случае
-            if (taskEntity == null) {
-                shouldFetchFromServer = true
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Ошибка при доступе к БД для задания ID $taskIdInt. Загружаем с сервера.")
-            shouldFetchFromServer = true
+        taskDetailCache[taskIdInt]?.let {
+            Timber.d("Задание $taskIdInt найдено в кэше.")
+            emit(Result.Success(it))
+            return@flow
         }
 
-        // Шаг 2: Сначала возвращаем локальные данные, если они есть и это не первый доступ
-        if (!isFirstAccess && taskEntity != null) {
-            Timber.d("Задание ID: $taskIdInt найдено в локальной БД. Отдаем результат.")
-            val taskItem = taskEntity.toTaskItem() 
+        val localTask = withContext(Dispatchers.IO) { taskDao.getTaskByIdSync(taskIdInt) }
+        if (localTask != null) {
+            val localText = localTask.getTextId()?.let { taskTextDao.getTaskTextById(it.toString()) }
+            val textDto = localText?.let { com.ruege.mobile.data.network.dto.response.TextDataDto(it.textId.toInt(), it.content, null, null, null) }
+            val taskItem = localTask.toTaskItemWithText(textDto)
+            taskDetailCache[taskIdInt] = taskItem
+            Timber.d("Задание $taskIdInt загружено из локальной БД.")
             emit(Result.Success(taskItem))
-            if (!shouldFetchFromServer) {
-                Timber.d("Используем только локальные данные, задание $taskIdInt уже было обновлено в этой сессии")
-                return@flow // Не первый доступ, есть локальные данные - выходим
-            }
+            return@flow
         }
 
-        // Шаг 3: Загружаем данные с сервера (при первом доступе или если локальных данных нет)
-        if (shouldFetchFromServer) {
-            try {
-                Timber.d("Загрузка деталей задания ID: $taskIdString с сервера.")
-                val response = taskApiService.getTaskDetail(taskIdString, includeText = true)
-                if (response.isSuccessful) {
-                    val taskDetailDto = response.body()
-                    if (taskDetailDto != null) {
-                        withContext(Dispatchers.IO) {
-                            try {
-                                Timber.d("Сохранение задания ID: ${taskDetailDto.id} в БД...")
-                                
-                                // Сохраняем задание в БД используя insert
-                                taskDao.insert(taskDetailDto.toEntity())
-                                
-                                // Отмечаем задание как обновленное в этой сессии
-                                updatedTaskCategories.add(taskKey.toString())
-                                
-                                // ВАЖНО: НЕ обновляем ContentEntity для группы заданий здесь,
-                                // чтобы избежать изменения количества заданий при просмотре деталей задания
-                                Timber.d("[COUNT_DEBUG] getTaskDetail: НЕ обновляем ContentEntity для задания ID: ${taskDetailDto.id}, EGE: ${taskDetailDto.egeNumber}")
-                                
-                                // Проверка и логирование текущего статуса ContentEntity
-                                if (taskDetailDto.egeNumber != null) {
-                                    val contentId = "task_group_${taskDetailDto.egeNumber}"
-                                    val contentEntity = contentDao.getContentByIdSync(contentId)
-                                    Timber.d("[COUNT_DEBUG] getTaskDetail: текущее состояние ContentEntity для группы ${taskDetailDto.egeNumber}: " +
-                                             "description = ${contentEntity?.getDescription() ?: "null"}, " +
-                                             "downloaded = ${contentEntity?.isDownloaded() ?: false}")
-                                }
-                                
-                                Timber.d("Успешно сохранено задание ID: ${taskDetailDto.id}, отмечено как обновленное.")
-                                // TODO: Сохранить taskDetailDto.text в TextDao
-                            } catch (dbException: Exception) {
-                                Timber.e(dbException, "!!! Ошибка БД при сохранении задания ID: ${taskDetailDto.id}")
-                            }
-                        }
-                        
-                        // Формируем HTML с текстом, если он есть
-                        val textContent = taskDetailDto.text?.content
-                        val textAuthor = taskDetailDto.text?.author
-                        val contentHtml = if (textContent != null) {
-                            val authorHtml = if (textAuthor != null) "<p class='author'>— $textAuthor</p>" else ""
-                            """
-                            <div class="task-text">
-                                $textContent
-                                $authorHtml
-                            </div>
-                            <div class="task-question">
-                                ${taskDetailDto.taskText ?: ""}
-                            </div>
-                            """.trimIndent()
-                        } else {
-                            taskDetailDto.taskText ?: ""
-                        }
-                        
-                        // Создаем объект TaskItem для отображения
-                        val taskItemFromServer = TaskItem(
-                            taskId = taskDetailDto.id.toString(),
-                            title = "Задание ${taskDetailDto.egeNumber ?: taskIdString}",
-                            egeTaskNumber = taskDetailDto.egeNumber,
-                            description = if (textContent != null) "Прочитайте текст и выполните задание" else "",
-                            content = contentHtml,
-                            answerType = AnswerType.TEXT, 
-                            maxPoints = 1, 
-                            timeLimit = 0, 
-                            solutions = null,
-                            correctAnswer = taskDetailDto.solution,
-                            explanation = taskDetailDto.explanation
-                        )
-                        
-                        // Отправляем результат
-                        emit(Result.Success(taskItemFromServer))
-                        Timber.d("Успешно загружено и смаплено задание ID: $taskIdString с сервера.")
-                    } else {
-                        Timber.w("Тело ответа для деталей задания ID: $taskIdString пусто.")
-                        
-                        // Если у нас все еще есть локальные данные - используем их
-                        if (taskEntity != null) {
-                            Timber.d("Используем локальное задание из-за пустого ответа сервера.")
-                            val taskItem = taskEntity.toTaskItem()
-                            emit(Result.Success(taskItem))
-                        } else {
-                            emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
-                        }
-                    }
-                } else {
-                    Timber.w("Не удалось загрузить детали задания с сервера (Код: ${response.code()}).")
-                    
-                    // Если у нас есть локальные данные - используем их в случае ошибки
-                    if (taskEntity != null) {
-                        Timber.d("Используем локальное задание из-за ошибки сервера.")
-                        val taskItem = taskEntity.toTaskItem()
-                        emit(Result.Success(taskItem))
-                    } else {
-                        emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
-                    }
-                }
-            } catch (e: Exception) { 
-                Timber.e(e, "Ошибка сети при получении деталей задания с сервера.")
-                
-                // Если у нас есть локальные данные - используем их в случае сетевой ошибки
-                if (taskEntity != null) {
-                    Timber.d("Используем локальное задание из-за ошибки сети.")
-                    val taskItem = taskEntity.toTaskItem()
+        Timber.d("Требуется загрузка с сервера для задания ID $taskIdString.")
+        try {
+            val response = taskApiService.getTaskDetail(taskIdString, includeText = true)
+            if (response.isSuccessful) {
+                val taskDetailDto = response.body()
+                if (taskDetailDto != null) {
+                    val taskItem = taskDetailDto.toEntity().toTaskItemWithText(taskDetailDto.text)
+                    taskDetailCache[taskIdInt] = taskItem
                     emit(Result.Success(taskItem))
                 } else {
-                    emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
+                    emit(Result.Failure(Exception("Пустой ответ от сервера для задания $taskIdString")))
                 }
+            } else {
+                emit(Result.Failure(Exception("Ошибка сервера: ${response.code()} для задания $taskIdString")))
             }
+        } catch (e: Exception) {
+            Timber.e(e, "Ошибка сети при получении деталей задания ID $taskIdString.")
+            emit(Result.Failure(e))
         }
     }
 
@@ -744,10 +516,6 @@ class ContentRepository @Inject constructor(
     suspend fun getContentDetails(contentId: String): ContentEntity? {
         return withContext(Dispatchers.IO) {
             var content = contentDao.getContentByIdSync(contentId)
-            // TODO: Добавить логику запроса с сервера, если content == null или нужно обновить
-            // if (content == null || needsUpdate(content)) { 
-            //    content = fetchAndSaveContentDetails(contentId)
-            // }
             content
         }
     }
@@ -776,40 +544,20 @@ class ContentRepository @Inject constructor(
         }
     }
     
-    // TODO: Метод fetchAndSaveContentDetails(contentId) для загрузки 
-    //       и сохранения полного содержимого элемента (теории, задания и т.д.)
-
-    // ----- Новый метод для проверки ответа -----
-    /**
-     * Отправляет ответ пользователя на сервер для проверки.
-     * @param taskId ID задания
-     * @param userAnswer Ответ пользователя
-     * @return Результат проверки ответа
-     * @throws Exception если произошла ошибка сети или API
-     */
     /*
     suspend fun checkAnswer(taskId: Int, userAnswer: String): AnswerCheckResult {
         Timber.d("Отправка ответа '$userAnswer' для задания $taskId на сервер")
-        // Создаем объект запроса с правильным полем
         val request = AnswerRequest(userAnswer = userAnswer)
-        // Выполняем API вызов с правильными параметрами
         val response: AnswerCheckResult = taskApiService.checkAnswer(taskId, request)
 
-        // Теперь response - это уже объект AnswerCheckResult
         Timber.d("Получен ответ от сервера для задания $taskId: isCorrect=${response.isCorrect}")
-
-        // TODO: Сохранить попытку ответа локально или на сервере через API, если нужно
-
-        // Возвращаем полученный результат
         return response
     }
     */
-    // ------------------------------------------
     
-    // Переменные для пагинации
     private val currentPageMap = mutableMapOf<String, Int>()
     private val hasMoreItemsMap = mutableMapOf<String, Boolean>()
-    private val pageSize = 20 // Размер страницы по умолчанию
+    private val pageSize = 20
     
     /**
      * Проверяет, есть ли еще задания для загрузки для указанной категории
@@ -837,203 +585,82 @@ class ContentRepository @Inject constructor(
      * Загружает следующую страницу заданий для указанной категории.
      */
     fun loadMoreTasksByCategory(categoryId: String): Flow<Result<List<TaskItem>>> = flow {
-        // Если это числовой egeNumber, выполняем проверку диапазона
-        val numericCategory = categoryId.toIntOrNull()
-        if (numericCategory != null && (numericCategory <= 0 || numericCategory > 30)) {
-            // Номера EGE заданий должны быть от 1 до 30 максимум
-            Timber.e("Категория $categoryId выходит за рамки допустимых номеров EGE задания (1-30). Вероятно, передан ID задания вместо номера категории.")
-            emit(Result.Failure(Exception("Неверный ID категории: $categoryId. Ожидается номер EGE задания от 1 до 30.")))
-            return@flow
-        }
-        
-        // Получаем текущую страницу или устанавливаем 2, если это первая загрузка дополнительных заданий
-        val currentPage = currentPageMap[categoryId]?.plus(1) ?: 2
         val egeNumber = categoryId
+        val currentPage = currentPageMap.getOrPut(egeNumber) { 1 } + 1
         
-        // Вычисляем skip на основе текущей страницы и размера страницы
-        val skip = (currentPage - 1) * pageSize
-        
-        Timber.d("Загрузка дополнительных заданий для категории $categoryId, страница $currentPage (skip=$skip, limit=$pageSize)")
+        Timber.d("Загрузка дополнительных заданий для категории $egeNumber, страница $currentPage")
         
         try {
-            // Запрашиваем дополнительные задания с сервера с указанием страницы
-            val response = taskApiService.getTasksByEgeNumberPaginated(egeNumber, limit = pageSize, pageNumber = currentPage)
+            val response = taskApiService.getTasksByEgeNumberPaginated(
+                egeNumber = egeNumber,
+                limit = pageSize,
+                pageNumber = currentPage,
+                includeText = false
+            )
             
             if (response.isSuccessful) {
-                val taskDtos = response.body() ?: emptyList()
+                val responseBody = response.body()
+                val taskDtos = responseBody?.tasks ?: emptyList()
                 
-                // Проверяем, есть ли еще страницы
-                val hasMoreItems = taskDtos.size >= pageSize
-                hasMoreItemsMap[categoryId] = hasMoreItems
+                hasMoreItemsMap[egeNumber] = taskDtos.size >= pageSize
                 
                 if (taskDtos.isNotEmpty()) {
-                    // Сохраняем номер текущей страницы
-                    currentPageMap[categoryId] = currentPage
+                    currentPageMap[egeNumber] = currentPage
                     
-                    // Преобразуем DTO в сущности для сохранения в БД
-                    val taskEntities = taskDtos.map { it.toEntity() }
+                    val additionalTaskItems = taskDtos.map { it.toTaskItem() }
                     
-                    // Сохраняем в базу данных без обновления описания ContentEntity
-                    withContext(Dispatchers.IO) {
-                        try {
-                            Timber.d("Сохранение ${taskEntities.size} дополнительных заданий в БД для EGE $egeNumber...")
-                            
-                            // Используем обычный insertAll, как в методе getTasksByCategory
-                            taskDao.insertAll(taskEntities)
-                            
-                            // ВАЖНО: Для загрузки дополнительных заданий НЕ обновляем описание ContentEntity, 
-                            // чтобы избежать сброса UI и перерисовки с неверным количеством
-                            
-                            // Обновляем только статус загрузки, не меняя описание с количеством
-                            val contentId = "task_group_$egeNumber"
-                            Timber.d("[COUNT_DEBUG] loadMoreTasksByCategory: получен contentId: $contentId. Обновляем только статус загрузки без изменения описания")
-                            
-                            // Получаем текущий контент перед обновлением для проверки
-                            val contentBefore = contentDao.getContentByIdSync(contentId)
-                            val currentDescription = contentBefore?.getDescription() ?: ""
-                            Timber.d("[COUNT_DEBUG] loadMoreTasksByCategory: текущее description: $currentDescription")
-                            
-                            // Обновляем только статус загрузки, не трогая description
-                            contentDao.updateDownloadStatus(contentId, true)
-                            
-                            // Если описание было пустым, обновляем его с количеством всех заданий 
-                            // (старых + новых, которые мы только что загрузили)
-                            if (currentDescription.isEmpty() || (!currentDescription.contains("заданий") && !currentDescription.contains("задание"))) {
-                                // Получаем полное количество заданий для этой категории
-                                val allTasksCount = withContext(Dispatchers.IO) {
-                                    taskDao.getTasksByEgeNumberSync(egeNumber).size + taskEntities.size
-                                }
-                                Timber.d("[COUNT_DEBUG] loadMoreTasksByCategory: нет существующего количества заданий, устанавливаем новое: $allTasksCount заданий")
-                                contentDao.updateDescription(contentId, "$allTasksCount заданий")
-                            }
-                            
-                            // Проверяем после обновления
-                            val contentAfter = contentDao.getContentByIdSync(contentId)
-                            Timber.d("[COUNT_DEBUG] loadMoreTasksByCategory: description после обновления: ${contentAfter?.getDescription() ?: "null"}")
-                            
-                            Timber.d("Успешно сохранено ${taskEntities.size} дополнительных заданий для EGE $egeNumber")
-                        } catch (dbException: Exception) {
-                            Timber.e(dbException, "!!! Ошибка БД при сохранении дополнительных заданий для EGE $egeNumber")
-                        }
-                    }
+                    val existingTasks = tasksCategoryCache[egeNumber] ?: emptyList()
+                    tasksCategoryCache[egeNumber] = existingTasks + additionalTaskItems
                     
-                    // Преобразуем DTO в TaskItem для отображения
-                    val additionalTaskItems = taskDtos.map { taskDto ->
-                        TaskItem(
-                            taskId = taskDto.id.toString(),
-                            title = "Задание ${taskDto.egeNumber}",
-                            egeTaskNumber = taskDto.egeNumber,
-                            description = taskDto.taskText ?: "",
-                            content = taskDto.taskText ?: "",
-                            answerType = AnswerType.TEXT, 
-                            maxPoints = 1, 
-                            timeLimit = 0, 
-                            solutions = null,
-                            correctAnswer = taskDto.solution,
-                            explanation = taskDto.explanation
-                        )
-                    }
+                    Timber.d("Успешно загружено и добавлено в кэш ${additionalTaskItems.size} заданий для EGE $egeNumber. Новы размер кэша: ${tasksCategoryCache[egeNumber]?.size}")
                     
-                    // Отправляем результат
-                    emit(Result.Success(additionalTaskItems))
-                    Timber.d("Успешно загружено и смаплено ${additionalTaskItems.size} дополнительных заданий с сервера, страница $currentPage")
+                    emit(Result.Success(tasksCategoryCache[egeNumber]!!))
                 } else {
-                    // Пустой список заданий - больше страниц нет
-                    hasMoreItemsMap[categoryId] = false
-                    emit(Result.Success(emptyList()))
-                    Timber.d("Сервер вернул пустой список дополнительных заданий, страница $currentPage. Больше заданий нет.")
+                    hasMoreItemsMap[egeNumber] = false
+                    emit(Result.Success(tasksCategoryCache[egeNumber] ?: emptyList()))
+                    Timber.d("Сервер вернул пустой список. Больше заданий для EGE $egeNumber нет.")
                 }
             } else {
-                // Ошибка запроса к серверу
-                Timber.w("Не удалось загрузить дополнительные задания с сервера (Код: ${response.code()}).")
+                Timber.w("Не удалось загрузить дополнительные задания с сервера для EGE $egeNumber (Код: ${response.code()}).")
                 emit(Result.Failure(Exception("Ошибка сервера: ${response.code()}")))
             }
         } catch (e: Exception) { 
-            Timber.e(e, "Ошибка сети при получении дополнительных заданий с сервера.")
+            Timber.e(e, "Ошибка сети при получении дополнительных заданий для EGE $egeNumber.")
             emit(Result.Failure(e))
         }
     }
 
     /**
-     * Нормализация количества заданий - проверяет актуальное количество в БД и обновляет описание,
-     * но только если текущее описание не содержит информацию о количестве.
-     * @param categoryId номер категории EGE (от 1 до 30)
-     */
-    suspend fun normalizeTaskCount(categoryId: String) {
-        val egeNumber = categoryId
-        val contentId = "task_group_$egeNumber"
-        
-        Timber.d("[COUNT_DEBUG] Начало нормализации количества заданий для категории $categoryId")
-        
-        withContext(Dispatchers.IO) {
-            try {
-                // Проверяем текущее состояние ContentEntity
-                val contentEntity = contentDao.getContentByIdSync(contentId)
-                
-                if (contentEntity == null) {
-                    Timber.d("[COUNT_DEBUG] ContentEntity не найден для категории $categoryId, нечего нормализовать")
-                    return@withContext
-                }
-                
-                val currentDescription = contentEntity.getDescription() ?: ""
-                Timber.d("[COUNT_DEBUG] Текущее описание: $currentDescription")
-                
-                // Проверяем, содержит ли описание информацию о количестве
-                val hasTaskCount = currentDescription.contains("заданий") || currentDescription.contains("задание")
-                
-                if (!hasTaskCount) {
-                    // Получаем актуальное количество заданий из БД
-                    val taskEntities = taskDao.getTasksByEgeNumberSync(egeNumber)
-                    val taskCount = taskEntities.size
-                    
-                    if (taskCount > 0) {
-                        // Обновляем только если есть задания
-                        Timber.d("[COUNT_DEBUG] Обновляем описание для $contentId на: $taskCount заданий")
-                        contentDao.updateDescription(contentId, "$taskCount заданий")
-                    } else {
-                        Timber.d("[COUNT_DEBUG] В БД нет заданий для категории $categoryId, оставляем описание без изменений")
-                    }
-                } else {
-                    Timber.d("[COUNT_DEBUG] Описание уже содержит информацию о количестве заданий: $currentDescription, пропускаем")
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "[COUNT_DEBUG] Ошибка при нормализации количества заданий для категории $categoryId")
-            }
-        }
-    }
-    
-    /**
-     * Нормализация количества заданий для всех категорий - проходит по всем категориям EGE и
-     * обновляет описание с количеством, если оно не содержит информацию о задачах.
-     */
-    suspend fun normalizeAllTaskCounts() {
-        Timber.d("[COUNT_DEBUG] Запуск нормализации количества заданий для всех категорий")
-        
-        // Обрабатываем все категории EGE от 1 до 30
-        for (categoryId in 1..30) {
-            normalizeTaskCount(categoryId.toString())
-        }
-        
-        Timber.d("[COUNT_DEBUG] Нормализация количества заданий для всех категорий завершена")
-    }
-
-    suspend fun getCachedTaskSolution(taskId: String): Solution? {
-        // return taskDao.getTaskSolution(taskId) // Закомментировано из-за Unresolved reference: getTaskSolution
-        return null // Временная заглушка
-    }
-
-    /**
      * Получает текст задания по его ID с сервера.
+     * Сначала проверяет кэш в памяти, затем запрашивает с сервера.
      */
     fun getTaskTextById(textId: String): Flow<Result<String>> = flow {
-        emit(Result.Loading) // Сообщаем о начале загрузки
+        taskTextCache[textId]?.let { cachedText ->
+            Timber.d("Текст задания '$textId' взят из кэша памяти.")
+            emit(Result.Success(cachedText))
+            return@flow
+        }
+
+        val textFromDb = withContext(Dispatchers.IO) { taskTextDao.getTaskTextById(textId) }
+        if (textFromDb != null) {
+            Timber.d("Текст задания '$textId' взят из БД.")
+            taskTextCache[textId] = textFromDb.content
+            emit(Result.Success(textFromDb.content))
+            return@flow
+        }
+
+        emit(Result.Loading)
         try {
-            Timber.d("Запрос текста задания с ID: $textId")
+            Timber.d("Запрос текста задания с ID: $textId с сервера.")
             val response = taskApiService.getTaskTextById(textId)
             if (response.isSuccessful) {
                 val taskTextDto = response.body()
                 if (taskTextDto != null && taskTextDto.content != null) {
-                    Timber.d("Текст задания '$textId' успешно получен: ${taskTextDto.content.take(50)}...")
+                    Timber.d("Текст задания '$textId' успешно получен, кэшируем в память и сохраняем в БД.")
+                    taskTextCache[textId] = taskTextDto.content
+                    withContext(Dispatchers.IO) {
+                        taskTextDao.insertAll(listOf(TaskTextEntity(textId, taskTextDto.content)))
+                    }
                     emit(Result.Success(taskTextDto.content))
                 } else {
                     Timber.w("Тело ответа или текст для $textId пустое.")
@@ -1053,4 +680,168 @@ class ContentRepository @Inject constructor(
     suspend fun getTasksByIds(taskIds: List<Int>): List<TaskEntity> = withContext(Dispatchers.IO) {
         taskDao.getTasksByIds(taskIds)
     }
+
+    private fun TaskDto.toTaskItem(): TaskItem {
+        return TaskItem(
+            taskId = this.id.toString(),
+            title = "Задание ${this.egeNumber}",
+            egeTaskNumber = this.egeNumber,
+            description = if (this.text != null) "Прочитайте текст и выполните задание" else "",
+            content = this.taskText ?: "",
+            answerType = AnswerType.TEXT,
+            maxPoints = 1,
+            timeLimit = 0,
+            solutions = null,
+            correctAnswer = this.solution,
+            explanation = this.explanation,
+            textId = this.textId,
+            isSolved = false
+        )
+    }
+
+    private fun TaskEntity.toTaskItem(): TaskItem {
+        return TaskItem(
+            taskId = this.id.toString(),
+            title = "Задание ${this.egeNumber}",
+            egeTaskNumber = this.egeNumber,
+            description = "",
+            content = this.taskText ?: "",
+            answerType = AnswerType.TEXT,
+            maxPoints = 1,
+            timeLimit = 0,
+            solutions = null,
+            correctAnswer = this.solution,
+            explanation = this.explanation,
+            textId = this.getTextId(),
+            isSolved = false
+        )
+    }
+
+    private fun TaskEntity.toTaskItemWithText(textDto: com.ruege.mobile.data.network.dto.response.TextDataDto?): TaskItem {
+        val contentHtml = this.taskText ?: ""
+
+        return TaskItem(
+            taskId = this.id.toString(),
+            title = "Задание ${this.egeNumber}",
+            egeTaskNumber = this.egeNumber,
+            description = if (textDto?.content != null) "Прочитайте текст и выполните задание" else "",
+            content = contentHtml,
+            answerType = AnswerType.TEXT,
+            maxPoints = 1,
+            timeLimit = 0,
+            solutions = null,
+            correctAnswer = this.solution,
+            explanation = this.explanation,
+            textId = this.getTextId()
+        )
+    }
+
+    suspend fun downloadTheory(contentId: String): Flow<Result<Unit>> = flow {
+        emit(Result.Loading)
+        try {
+            val theoryDto = getTheoryContentById(contentId)
+            if (theoryDto != null) {
+                val downloadedEntity = DownloadedTheoryEntity(
+                    theoryDto.id.toString(),
+                    theoryDto.title,
+                    theoryDto.content,
+                    System.currentTimeMillis()
+                )
+                downloadedTheoryDao.insert(downloadedEntity)
+
+                val contentEntity = ContentEntity.createForKotlin(
+                    theoryDto.id.toString(),
+                    theoryDto.title,
+                    "", 
+                    "theory",
+                    null, 
+                    true, 
+                    false, 
+                    theoryDto.egeNumber
+                )
+                contentDao.insert(contentEntity)
+
+                emit(Result.Success(Unit))
+            } else {
+                emit(Result.Failure(Exception("Не удалось загрузить теорию для скачивания.")))
+            }
+        } catch (e: Exception) {
+            emit(Result.Failure(e))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    fun getDownloadedTheory(contentId: String): LiveData<DownloadedTheoryEntity> {
+        return downloadedTheoryDao.getDownloadedTheoryById(contentId)
+    }
+
+    suspend fun deleteDownloadedTheory(contentId: String): Flow<Result<Unit>> = flow {
+        emit(Result.Loading)
+        try {
+            downloadedTheoryDao.deleteById(contentId)
+            contentDao.deleteById(contentId)
+            emit(Result.Success(Unit))
+        } catch (e: Exception) {
+            emit(Result.Failure(e))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun downloadTaskGroup(egeNumber: String): Flow<Result<Unit>> = flow {
+        emit(Result.Loading)
+        try {
+            Timber.d("Starting download for task group egeNumber: $egeNumber")
+            val response = taskApiService.getTasksByEgeNumberPaginated(
+                egeNumber = egeNumber,
+                limit = 1000, 
+                pageNumber = 1,
+                includeText = true
+            )
+
+            if (response.isSuccessful) {
+                val responseBody = response.body()
+                val taskDtos = responseBody?.tasks ?: emptyList()
+                val textDtos = responseBody?.texts ?: emptyList()
+
+                if (taskDtos.isNotEmpty()) {
+                    val taskEntities = taskDtos.map { it.toEntity() }
+                    taskDao.insertAll(taskEntities)
+
+                    if (textDtos.isNotEmpty()) {
+                        val textEntities = textDtos.map { TaskTextEntity(it.id.toString(), it.content ?: "") }
+                        taskTextDao.insertAll(textEntities)
+                    }
+                    Timber.d("Successfully downloaded and saved ${taskDtos.size} tasks for egeNumber $egeNumber.")
+                    
+                    emit(Result.Success(Unit))
+                } else {
+                    emit(Result.Failure(Exception("No tasks found for group $egeNumber to download.")))
+                }
+            } else {
+                emit(Result.Failure(Exception("Failed to fetch tasks for group $egeNumber. Code: ${response.code()}")))
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error downloading task group $egeNumber")
+            emit(Result.Failure(e))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun deleteDownloadedTaskGroup(egeNumber: String): Flow<Result<Unit>> = flow {
+        emit(Result.Loading)
+        try {
+            val tasksInGroup = taskDao.getTasksByEgeNumberSync(egeNumber)
+            val textIdsToDelete = tasksInGroup.mapNotNull { it.getTextId() }.distinct().map { it.toString() }
+
+            taskDao.deleteTasksByEgeNumber(egeNumber)
+            Timber.d("Deleted all tasks for egeNumber $egeNumber.")
+
+            if (textIdsToDelete.isNotEmpty()) {
+                taskTextDao.deleteByIds(textIdsToDelete)
+                Timber.d("Deleted ${textIdsToDelete.size} associated texts for egeNumber $egeNumber.")
+            }
+
+            emit(Result.Success(Unit))
+        } catch(e: Exception) {
+            Timber.e(e, "Error deleting task group $egeNumber")
+            emit(Result.Failure(e))
+        }
+    }.flowOn(Dispatchers.IO)
 }

@@ -36,8 +36,14 @@ public interface PracticeStatisticsDao {
     @Update
     void update(PracticeStatisticsEntity statistics);
 
+    @Update
+    void updateAll(List<PracticeStatisticsEntity> statisticsList);
+
     @Query("SELECT * FROM practice_statistics WHERE ege_number = :egeNumber")
     Flow<PracticeStatisticsEntity> getStatisticsByEgeNumber(String egeNumber);
+
+    @Query("SELECT * FROM practice_statistics WHERE ege_number = :egeNumber")
+    PracticeStatisticsEntity getStatisticsByEgeNumberSync(String egeNumber);
 
     @Query("SELECT * FROM practice_statistics ORDER BY total_attempts DESC")
     Flow<List<PracticeStatisticsEntity>> getAllStatisticsByAttemptsDesc();
@@ -76,4 +82,10 @@ public interface PracticeStatisticsDao {
     @Query("INSERT OR IGNORE INTO practice_statistics (ege_number, total_attempts, correct_attempts, last_attempt_date) " +
            "VALUES (:egeNumber, 0, 0, 0)")
     void createStatisticsIfNotExists(String egeNumber);
+
+    @androidx.room.Transaction
+    default void clearAndInsertAll(List<PracticeStatisticsEntity> statisticsList) {
+        clearAllStatistics();
+        insertAll(statisticsList);
+    }
 } 

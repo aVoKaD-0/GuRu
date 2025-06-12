@@ -16,7 +16,8 @@ import javax.inject.Singleton
 @Singleton
 class PracticeStatisticsRepository @Inject constructor(
     private val practiceAttemptDao: PracticeAttemptDao,
-    private val practiceStatisticsDao: PracticeStatisticsDao
+    private val practiceStatisticsDao: PracticeStatisticsDao,
+    private val progressSyncRepository: ProgressSyncRepository
 ) {
 
     /**
@@ -32,11 +33,6 @@ class PracticeStatisticsRepository @Inject constructor(
         }
 
         withContext(Dispatchers.IO) {
-            Log.d("PracticeStatsRepo", "Checking attempts for taskId: $taskLocalDbId BEFORE insert.")
-            val wasAttemptedBefore = practiceAttemptDao.wasAttemptsForTask(taskLocalDbId)
-            Log.d("PracticeStatsRepo", "taskId: $taskLocalDbId, wasAttemptedBefore: $wasAttemptedBefore")
-
-            // Всегда записываем текущую попытку
             val attempt = PracticeAttemptEntity(
                 taskLocalDbId,
                 isCorrect,
@@ -45,34 +41,23 @@ class PracticeStatisticsRepository @Inject constructor(
             practiceAttemptDao.insert(attempt)
             Log.d("PracticeStatsRepo", "Attempt recorded for taskId: $taskLocalDbId, isCorrect: $isCorrect.")
 
-            // Проверим еще раз состояние ПОСЛЕ insert, просто для информации
-            val isNowAttempted = practiceAttemptDao.wasAttemptsForTask(taskLocalDbId)
-            Log.d("PracticeStatsRepo", "taskId: $taskLocalDbId, isNowAttempted (after insert): $isNowAttempted")
+            if (egeNumberForStats.isNotEmpty()) {
+                practiceStatisticsDao.createStatisticsIfNotExists(egeNumberForStats)
+                
+                practiceStatisticsDao.updateStatisticsAfterAttempt(
+                    egeNumberForStats,
+                    isCorrect,
+                    timestamp
+                )
+                Log.d("PracticeStatsRepo", "PracticeStatisticsEntity for egeNumber: $egeNumberForStats updated after attempt.")
 
-            // Обновляем PracticeStatisticsEntity только если это была первая попытка для данного task_id
-            if (!wasAttemptedBefore) {
-                Log.d("PracticeStatsRepo", "Condition !wasAttemptedBefore is TRUE. Updating PracticeStatisticsEntity.")
-                if (egeNumberForStats.isNotEmpty()) {
-                    practiceStatisticsDao.createStatisticsIfNotExists(egeNumberForStats)
-                    val statsEntity = practiceStatisticsDao.getStatisticsByEgeNumber(egeNumberForStats).firstOrNull()
-
-                    if (statsEntity != null) {
-                        statsEntity.totalAttempts += 1
-                        if (isCorrect) {
-                            statsEntity.correctAttempts += 1
-                        }
-                        statsEntity.lastAttemptDate = timestamp
-                        
-                        practiceStatisticsDao.update(statsEntity)
-                        Log.d("PracticeStatsRepo", "PracticeStatisticsEntity for egeNumber: $egeNumberForStats updated. Total: ${statsEntity.totalAttempts}, Correct: ${statsEntity.correctAttempts}")
-                    } else {
-                        Log.e("PracticeStatsRepo", "Could not find PracticeStatisticsEntity for egeNumber: $egeNumberForStats after createIfNotExists.")
-                    }
-                } else {
-                    Log.w("PracticeStatsRepo", "egeNumberForStats is empty for taskId: $taskLocalDbId. Cannot update PracticeStatisticsEntity even if it's the first attempt for task_id.")
+                val updatedStats = practiceStatisticsDao.getStatisticsByEgeNumberSync(egeNumberForStats)
+                updatedStats?.let {
+                    progressSyncRepository.queueStatisticsUpdate(it, false)
                 }
+
             } else {
-                Log.d("PracticeStatsRepo", "Condition !wasAttemptedBefore is FALSE. PracticeStatisticsEntity NOT updated for egeNumber: $egeNumberForStats.")
+                Log.w("PracticeStatsRepo", "egeNumberForStats is empty for taskId: $taskLocalDbId. Cannot update PracticeStatisticsEntity.")
             }
         }
     }

@@ -19,7 +19,7 @@ import androidx.room.PrimaryKey
             entity = VariantSharedTextEntity::class,
             parentColumns = ["variant_shared_text_id"],
             childColumns = ["variant_shared_text_id"],
-            onDelete = ForeignKey.SET_NULL // Если общий текст удалят, задание не должно удаляться
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [
@@ -30,7 +30,7 @@ import androidx.room.PrimaryKey
 data class VariantTaskEntity(
     @PrimaryKey
     @ColumnInfo(name = "variant_task_id")
-    val variantTaskId: Int, // ID задания, приходит с сервера.
+    val variantTaskId: Int,
 
     @ColumnInfo(name = "variant_id")
     val variantId: Int,
@@ -70,8 +70,8 @@ data class VariantTaskEntity(
     val timeLimit: Int,
 
     @ColumnInfo(name = "created_at")
-    val createdAt: String, // ISO 8601
+    val createdAt: String, 
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: String // ISO 8601
+    val updatedAt: String 
 ) 

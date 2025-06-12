@@ -50,7 +50,6 @@ class StatisticsAdapter(
             tvSuccessRate.text = "Успешность: ${String.format("%.1f", successRate)}%"
             progressSuccess.progress = successRate.toInt()
             
-            // Изменение цвета прогресс-бара в зависимости от успешности
             val colorResId = when {
                 successRate >= 80 -> android.R.color.holo_green_dark
                 successRate >= 50 -> android.R.color.holo_orange_dark

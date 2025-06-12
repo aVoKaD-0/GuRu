@@ -1,11 +1,13 @@
 package com.ruege.mobile.data.network.dto.request
 
-import com.google.gson.annotations.SerializedName
+import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 
 /**
  * DTO для отправки ответа пользователя на проверку.
  */
+@JsonClass(generateAdapter = true)
 data class AnswerRequest(
-    @SerializedName("user_answer") 
+    @field:Json(name = "user_answer")
     val userAnswer: String
 ) 

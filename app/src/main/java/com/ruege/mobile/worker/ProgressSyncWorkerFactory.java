@@ -9,6 +9,7 @@ import androidx.work.WorkerFactory;
 import androidx.work.WorkerParameters;
 import com.ruege.mobile.data.local.dao.ProgressSyncQueueDao;
 import com.ruege.mobile.data.network.api.ProgressApiService;
+import com.ruege.mobile.data.network.api.PracticeApiService;
 import com.ruege.mobile.data.repository.PracticeSyncRepository;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -22,19 +23,21 @@ public class ProgressSyncWorkerFactory extends WorkerFactory {
 
     private final ProgressSyncQueueDao progressSyncQueueDao;
     private final ProgressApiService progressApiService;
+    private final PracticeApiService practiceApiService;
     private final PracticeSyncRepository practiceSyncRepository;
 
     @Inject
     public ProgressSyncWorkerFactory(
             ProgressSyncQueueDao progressSyncQueueDao,
             ProgressApiService progressApiService,
+            PracticeApiService practiceApiService,
             PracticeSyncRepository practiceSyncRepository) {
         this.progressSyncQueueDao = progressSyncQueueDao;
         this.progressApiService = progressApiService;
+        this.practiceApiService = practiceApiService;
         this.practiceSyncRepository = practiceSyncRepository;
         
-        // Логируем создание фабрики для отладки
-        Log.d(TAG, "ProgressSyncWorkerFactory created with progressSyncQueueDao and progressApiService");
+        Log.d(TAG, "ProgressSyncWorkerFactory created with all api services");
     }
 
     @Nullable
@@ -55,17 +58,16 @@ public class ProgressSyncWorkerFactory extends WorkerFactory {
                     workerParameters,
                     progressSyncQueueDao,
                     progressApiService,
+                    practiceApiService,
                     practiceSyncRepository
                 );
             } else {
                 Log.d(TAG, "Using default creation for worker: " + workerClassName);
             }
             
-            // Для других типов worker'ов возвращаем null, чтобы система создавала их стандартным способом
             return null;
         } catch (Exception e) {
             Log.e(TAG, "Error creating worker " + workerClassName, e);
-            // При ошибке возвращаем null, чтобы система могла попробовать использовать стандартный механизм
             return null;
         }
     }

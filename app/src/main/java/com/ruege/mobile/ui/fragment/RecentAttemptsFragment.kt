@@ -52,9 +52,8 @@ class RecentAttemptsFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.recentAttempts.observe(viewLifecycleOwner) { attempts ->
-                    binding.pbLoadingRecentAttempts.visibility = View.GONE // Скрыть ProgressBar в любом случае
+                    binding.pbLoadingRecentAttempts.visibility = View.GONE
                     if (attempts == null) {
-                        // Начальное состояние или загрузка
                         binding.pbLoadingRecentAttempts.visibility = View.VISIBLE
                         binding.tvNoRecentAttempts.visibility = View.GONE
                         binding.rvRecentAttempts.visibility = View.GONE
@@ -69,10 +68,8 @@ class RecentAttemptsFragment : Fragment() {
                 }
             }
         }
-        // Запросить загрузку, если LiveData еще не имеет значения (например, при первом запуске)
         if (viewModel.recentAttempts.value == null) {
-             binding.pbLoadingRecentAttempts.visibility = View.VISIBLE // Показать ProgressBar перед загрузкой
-            // viewModel.loadRecentAttempts() // Уже вызывается в init ViewModel
+             binding.pbLoadingRecentAttempts.visibility = View.VISIBLE
         }
     }
 

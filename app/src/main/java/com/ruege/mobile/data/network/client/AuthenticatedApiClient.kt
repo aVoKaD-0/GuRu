@@ -66,7 +66,7 @@ class TokenAuthenticator @Inject constructor(
                 }
             }
             
-            if (result is com.ruege.mobile.utils.Resource.Success && result.data != null) {
+            if (result is com.ruege.mobile.utilss.Resource.Success && result.data != null) {
                 tokenManager.saveAccessToken(result.data.accessToken)
                 tokenManager.saveRefreshToken(result.data.refreshToken)
                 Log.d(TAG, "Токен успешно обновлен, повторяем запрос")
@@ -75,7 +75,7 @@ class TokenAuthenticator @Inject constructor(
                     .header("Authorization", "Bearer ${result.data.accessToken}")
                     .build()
             } else {
-                Log.e(TAG, "Не удалось обновить токен: ${(result as? com.ruege.mobile.utils.Resource.Error)?.message}")
+                Log.e(TAG, "Не удалось обновить токен: ${(result as? com.ruege.mobile.utilss.Resource.Error)?.message}")
                 tokenManager.clearTokens()
             }
         } catch (e: Exception) {

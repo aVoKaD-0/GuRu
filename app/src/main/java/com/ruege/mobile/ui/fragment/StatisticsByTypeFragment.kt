@@ -12,7 +12,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
 import com.ruege.mobile.R
 import com.ruege.mobile.ui.adapter.StatisticsAdapter
-import com.ruege.mobile.viewmodel.PracticeViewModel
+import com.ruege.mobile.ui.viewmodel.PracticeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -63,7 +63,6 @@ class StatisticsByTypeFragment : Fragment() {
     }
 
     private fun navigateToPractice(egeNumber: String) {
-        // Навигация к экрану практики по выбранному номеру ЕГЭ
         findNavController().navigate(
             R.id.navigation_exercises,
             Bundle().apply {
@@ -71,7 +70,6 @@ class StatisticsByTypeFragment : Fragment() {
             }
         )
         
-        // Показываем сообщение
         Toast.makeText(
             requireContext(),
             "Практика задания $egeNumber",

@@ -1,4 +1,4 @@
-package com.ruege.mobile.data.network.dto.response // или куда вы складываете DTO для ответов
+package com.ruege.mobile.data.network.dto.response
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass

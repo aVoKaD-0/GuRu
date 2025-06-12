@@ -48,7 +48,6 @@ class UserViewModel @Inject constructor(
             try {
                 val hasUsers = userRepository.hasUsers()
                 if (hasUsers) {
-                    // Получаем первого пользователя из базы данных
                     val user = userRepository.getFirstUser()
                     _currentUser.postValue(user)
                 } else {

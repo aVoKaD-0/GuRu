@@ -23,6 +23,8 @@ import com.ruege.mobile.data.local.dao.VariantSharedTextDao;
 import com.ruege.mobile.data.local.dao.VariantTaskDao;
 import com.ruege.mobile.data.local.dao.UserVariantTaskAnswerDao;
 import com.ruege.mobile.data.local.dao.VariantTaskOptionDao;
+import com.ruege.mobile.data.local.dao.DownloadedTheoryDao;
+import com.ruege.mobile.data.local.dao.TaskTextDao;
 
 import com.ruege.mobile.data.local.entity.CategoryEntity;
 import com.ruege.mobile.data.local.entity.ContentEntity;
@@ -41,18 +43,8 @@ import com.ruege.mobile.data.local.entity.VariantSharedTextEntity;
 import com.ruege.mobile.data.local.entity.VariantTaskEntity;
 import com.ruege.mobile.data.local.entity.UserVariantTaskAnswerEntity;
 import com.ruege.mobile.data.local.entity.VariantTaskOptionEntity;
-import com.ruege.mobile.data.local.migration.Migration1to2;
-import com.ruege.mobile.data.local.migration.Migration3to4;
-import com.ruege.mobile.data.local.migration.Migration4to5;
-import com.ruege.mobile.data.local.migration.Migration5to6;
-import com.ruege.mobile.data.local.migration.Migration6to7;
-import com.ruege.mobile.data.local.migration.Migration7to8;
-import com.ruege.mobile.data.local.migration.Migration8to9;
-import com.ruege.mobile.data.local.migration.Migration9to10;
-import com.ruege.mobile.data.local.migration.Migration10to11;
-import com.ruege.mobile.data.local.migration.Migration11to12;
-import com.ruege.mobile.data.local.migration.Migration12to13;
-import com.ruege.mobile.data.local.migration.Migration13to14;
+import com.ruege.mobile.data.local.entity.DownloadedTheoryEntity;
+import com.ruege.mobile.data.local.entity.TaskTextEntity;
 
 
 @Database(
@@ -73,9 +65,11 @@ import com.ruege.mobile.data.local.migration.Migration13to14;
         VariantSharedTextEntity.class,
         VariantTaskEntity.class,
         UserVariantTaskAnswerEntity.class,
-        VariantTaskOptionEntity.class
+        VariantTaskOptionEntity.class,
+        DownloadedTheoryEntity.class,
+        TaskTextEntity.class
     },
-    version = 15,
+    version = 18,
     exportSchema = true
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -99,6 +93,8 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract VariantTaskDao variantTaskDao();
     public abstract UserVariantTaskAnswerDao userVariantTaskAnswerDao();
     public abstract VariantTaskOptionDao variantTaskOptionDao();
+    public abstract DownloadedTheoryDao downloadedTheoryDao();
+    public abstract TaskTextDao taskTextDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final String DATABASE_NAME = "mobile_database.db";
@@ -107,31 +103,16 @@ public abstract class AppDatabase extends RoomDatabase {
         if (INSTANCE == null) {
             synchronized (AppDatabase.class) {
                 if (INSTANCE == null) {
-                    // Удаляем временное решение с удалением базы данных
-                    
                     INSTANCE = Room.databaseBuilder(
                             context.getApplicationContext(),
                             AppDatabase.class,
                             DATABASE_NAME
                         )
                         .fallbackToDestructiveMigration()
-                        .addMigrations(new Migration1to2()) 
-                        .addMigrations(new Migration3to4())
-                        .addMigrations(new Migration4to5())
-                        .addMigrations(new Migration5to6())
-                        .addMigrations(new Migration6to7())
-                        .addMigrations(new Migration7to8())
-                        .addMigrations(new Migration8to9())
-                        .addMigrations(new Migration9to10())
-                        .addMigrations(new Migration10to11())
-                        .addMigrations(new Migration11to12())
-                        .addMigrations(new Migration12to13())
-                        .addMigrations(new Migration13to14())
                         .addCallback(new Callback() {
                             @Override
                             public void onOpen(@NonNull SupportSQLiteDatabase db) {
                                 super.onOpen(db);
-                                // Здесь можно выполнить дополнительные действия после открытия базы
                                 DBResetHelper.checkAndFixProgressTable(context);
                             }
                         })
@@ -156,4 +137,4 @@ public abstract class AppDatabase extends RoomDatabase {
         getInstance(context);
     }
     
-} 
+}

@@ -88,4 +88,10 @@ public interface ContentDao {
     
     @Query("SELECT content_id FROM contents WHERE type = :type")
     List<String> getContentIdsByType(String type);
+
+    @Query("SELECT COUNT(*) FROM contents WHERE type = :type")
+    int getContentCountByType(String type);
+
+    @Query("DELETE FROM contents WHERE content_id = :contentId")
+    void deleteById(String contentId);
 } 

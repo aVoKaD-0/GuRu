@@ -10,8 +10,10 @@ import com.ruege.mobile.data.local.entity.ProgressSyncQueueEntity
 import com.ruege.mobile.data.local.entity.SyncStatus
 import com.ruege.mobile.data.repository.ProgressRepository
 import com.ruege.mobile.data.repository.ProgressSyncRepository
+import com.ruege.mobile.data.repository.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,7 +47,9 @@ class ProgressViewModel @Inject constructor(
      * Запускает синхронизацию прогресса с сервером
      */
     fun syncNow() {
-        progressSyncRepository.syncNow(true)
+        viewModelScope.launch {
+            progressSyncRepository.syncNow(true)
+        }
     }
     
     /**
@@ -64,17 +68,19 @@ class ProgressViewModel @Inject constructor(
     }
 
     /**
-     * Инициализирует прогресс пользователя при первом запуске
+     * Проверяет и устанавливает статус первоначальной настройки пользователя (например, флаг isFirstTimeUser).
+     * Этот метод вызывается, чтобы определить, нужны ли какие-либо действия при первом запуске для пользователя.
+     * Непосредственно НЕ загружает прогресс с сервера, для этого есть refreshProgress() или checkAndInitializeProgressAndLoad().
      */
     fun initializeProgress() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                progressRepository.initializeUserProgress()
-                Log.d(TAG, "Инициализация прогресса пользователя выполнена")
+                progressRepository.checkAndSetUserSetupStatus()
+                Log.d(TAG, "Проверка и установка статуса настройки пользователя выполнена")
             } catch (e: Exception) {
-                Log.e(TAG, "Ошибка при инициализации прогресса пользователя", e)
-                _error.value = "Не удалось инициализировать прогресс: ${e.message}"
+                Log.e(TAG, "Ошибка при проверке и установке статуса настройки пользователя", e)
+                _error.value = "Не удалось проверить статус настройки пользователя: ${e.message}"
             } finally {
                 _isLoading.value = false
             }
@@ -113,9 +119,9 @@ class ProgressViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 progressRepository.updateProgress(contentId, percentage, syncImmediately)
-                Log.d(TAG, "Прогресс для $contentId обновлен на $percentage%")
+                Log.d(TAG, "Progress for $contentId updated to $percentage%")
             } catch (e: Exception) {
-                Log.e(TAG, "Ошибка при обновлении прогресса для $contentId", e)
+                Log.e(TAG, "Error updating progress for $contentId", e)
                 _error.value = "Не удалось обновить прогресс: ${e.message}"
             }
         }
@@ -157,9 +163,9 @@ class ProgressViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 progressRepository.clearAllProgress()
-                Log.d(TAG, "Весь прогресс пользователя очищен")
+                Log.d(TAG, "All progress cleared for user")
             } catch (e: Exception) {
-                Log.e(TAG, "Ошибка при очистке всего прогресса пользователя", e)
+                Log.e(TAG, "Error clearing progress for user", e)
                 _error.value = "Не удалось очистить прогресс: ${e.message}"
             }
         }
@@ -181,28 +187,30 @@ class ProgressViewModel @Inject constructor(
     }
     
     /**
-     * Проверяет наличие прогресса, инициализирует его при необходимости (для новых пользователей)
-     * и загружает актуальные данные с сервера (для существующих пользователей).
-     * Управляет состоянием isLoading и error для всего процесса.
+     * Проверяет, инициализирует (если нужно на стороне сервера) и загружает прогресс.
+     * Сначала всегда пытается обновить данные с сервера.
+     * Затем проверяет локальное состояние для установки флага первой настройки.
      */
     fun checkAndInitializeProgressAndLoad() {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null 
-            Log.d(TAG, "checkAndInitializeProgressAndLoad: Начало операции, isLoading=true.")
+            Log.d(TAG, "checkAndInitializeProgressAndLoad: Начало операции.")
             try {
-                val isNewlyInitialized = progressRepository.initializeUserProgress()
+                Log.d(TAG, "checkAndInitializeProgressAndLoad: Запускаем PULL с сервера (refreshProgress).")
+                progressRepository.refreshProgress() 
+                Log.d(TAG, "checkAndInitializeProgressAndLoad: refreshProgress завершен.")
 
-                if (isNewlyInitialized) {
-                    Log.d(TAG, "checkAndInitializeProgressAndLoad: Новый пользователь. Прогресс инициализирован локально.")
-                    Log.d(TAG, "checkAndInitializeProgressAndLoad: Новый пользователь - запускаем немедленную синхронизацию (PUSH).")
-                    progressSyncRepository.syncNow(expedited = true)
+                val isConsideredNewSetupLocally = progressRepository.checkAndSetUserSetupStatus()
+                Log.d(TAG, "checkAndInitializeProgressAndLoad: checkAndSetUserSetupStatus результат: $isConsideredNewSetupLocally")
+
+                if (isConsideredNewSetupLocally) {
+                    Log.d(TAG, "checkAndInitializeProgressAndLoad: Локально определено состояние 'первой настройки'. " +
+                               "Предполагается, что сервер инициализировал данные, и они были загружены.")
                 } else {
-                    Log.d(TAG, "checkAndInitializeProgressAndLoad: Существующий пользователь. Запускаем PULL с сервера.")
-                    
-                    progressRepository.refreshProgress() 
+                    Log.d(TAG, "checkAndInitializeProgressAndLoad: Существующий пользователь или данные уже настроены локально.")
                 }
-                Log.d(TAG, "checkAndInitializeProgressAndLoad: Локальная инициализация/обновление завершено.")
+                
             } catch (e: Exception) {
                 Log.e(TAG, "checkAndInitializeProgressAndLoad: Ошибка при начальной загрузке/инициализации прогресса", e)
                 _error.postValue("Не удалось загрузить/инициализировать прогресс: ${e.message}")

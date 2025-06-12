@@ -22,6 +22,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -45,8 +46,8 @@ import com.ruege.mobile.data.local.entity.VariantEntity
 import com.ruege.mobile.data.local.entity.VariantSharedTextEntity
 import com.ruege.mobile.data.local.entity.VariantTaskEntity
 import com.ruege.mobile.data.local.entity.UserVariantTaskAnswerEntity
-import com.ruege.mobile.utils.Resource
-import com.ruege.mobile.viewmodel.VariantViewModel
+import com.ruege.mobile.utilss.Resource
+import com.ruege.mobile.ui.viewmodel.VariantViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -54,29 +55,24 @@ import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import android.content.DialogInterface
 
-// private const val TAG = "VariantDetailBS" // Удаляем старый TAG
 private const val ARG_VARIANT_ID = "variant_id"
-private const val ARG_VARIANT_TITLE = "variant_title" // Добавляем для заголовка
-private const val TIMER_DURATION_MS = (3 * 60 * 60 * 1000) + (55 * 60 * 1000).toLong() // 3 часа 55 минут
+private const val ARG_VARIANT_TITLE = "variant_title"
+private const val TIMER_DURATION_MS = (3 * 60 * 60 * 1000) + (55 * 60 * 1000).toLong()
 
 @AndroidEntryPoint
 class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     companion object {
-        const val TAG_VARIANT_DETAIL_BS = "VariantDetailBottomSheet_TAG" // Новый публичный TAG
+        const val TAG_VARIANT_DETAIL_BS = "VariantDetailBottomSheet_TAG"
 
         @JvmStatic
-        fun newInstance(variantId: String, title: String?): VariantDetailBottomSheetDialogFragment { // Изменена сигнатура, ID теперь String
+        fun newInstance(variantId: String, title: String?): VariantDetailBottomSheetDialogFragment {
             val fragment = VariantDetailBottomSheetDialogFragment()
             val args = Bundle()
-            // Поскольку currentVariantId у нас Int, а MainActivity передает String (после String.valueOf)
-            // нужно решить, какой тип будет основным. Если ID в БД - Int, то здесь лучше принимать Int.
-            // Если ID от API - String, то пусть будет String. Пока что будем конвертировать String в Int.
             try {
                 args.putInt(ARG_VARIANT_ID, variantId.toInt())
             } catch (e: NumberFormatException) {
                 Log.e(TAG_VARIANT_DETAIL_BS, "Error parsing variantId '$variantId' to Int", e)
-                // Здесь можно обработать ошибку, например, показать Toast или закрыть диалог
             }
             args.putString(ARG_VARIANT_TITLE, title)
             fragment.arguments = args
@@ -87,43 +83,42 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
     private val variantViewModel: VariantViewModel by activityViewModels()
     private var currentVariantId: Int? = null
     private var currentVariantTitle: String? = null
-    // private var userAnswersMap: Map<Int, UserVariantTaskAnswerEntity>? = null // Больше не храним здесь, получаем из LiveData в checkAndPopulate
 
-    // Views для инструкций
     private lateinit var svInstructionsArea: NestedScrollView
     private lateinit var btnAcknowledgeInstructions: Button
 
-    // Views для решения варианта
-    private lateinit var nsvVariantSolvingArea: NestedScrollView
+    private lateinit var flVariantSolvingArea: FrameLayout
+    private lateinit var nsvTasksScrollView: NestedScrollView
     private lateinit var tvVariantName: TextView
     private lateinit var tvVariantDescription: TextView
     private lateinit var llDynamicContentContainer: LinearLayout
     private lateinit var btnFinishVariant: Button
     private lateinit var tvTimer: TextView
+    private lateinit var btnTimerPauseResume: ImageButton
     
-    private lateinit var pbVariantDetailLoading: ProgressBar // Общий ProgressBar
+    private lateinit var pbVariantDetailLoading: ProgressBar
 
     private var countDownTimer: CountDownTimer? = null
+    private var timeRemainingInMillis: Long = TIMER_DURATION_MS
     private var instructionsAcknowledged = false
-    private val displayedSharedTextIds = mutableSetOf<Int>() // Для отслеживания отображенных общих текстов
+    private val displayedSharedTextIds = mutableSetOf<Int>()
 
-    // Переменные для хранения текущих данных из LiveData, чтобы избежать частого доступа к .value
     private var currentVariantEntity: VariantEntity? = null
     private var currentSharedTexts: List<VariantSharedTextEntity>? = null
     private var currentTasks: List<VariantTaskEntity>? = null
     private var currentUserAnswers: Map<Int, UserVariantTaskAnswerEntity>? = null
     private var currentIsChecked: Boolean = false
     private var lastFocusedTaskEditTextId: Int? = null
+    private var isPaused = false
+    private var timerHasStartedOnce = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         arguments?.let {
-            // currentVariantId = it.getInt(ARG_VARIANT_ID) // Было
             if (it.containsKey(ARG_VARIANT_ID)) {
                 currentVariantId = it.getInt(ARG_VARIANT_ID)
             } else {
                 Log.e(TAG_VARIANT_DETAIL_BS, "ARG_VARIANT_ID not found in arguments")
-                // Обработка случая, когда ID не передан или ключ некорректен
             }
             currentVariantTitle = it.getString(ARG_VARIANT_TITLE)
         }
@@ -136,26 +131,26 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
     ): View? {
         val view = inflater.inflate(R.layout.bottom_sheet_variant_detail, container, false)
         
-        // Инициализация Views
         pbVariantDetailLoading = view.findViewById<ProgressBar>(R.id.pb_variant_detail_loading)
         
         svInstructionsArea = view.findViewById<NestedScrollView>(R.id.sv_instructions_area)
         btnAcknowledgeInstructions = view.findViewById<Button>(R.id.btn_acknowledge_instructions)
         
-        nsvVariantSolvingArea = view.findViewById<NestedScrollView>(R.id.nsv_variant_solving_area)
+        flVariantSolvingArea = view.findViewById(R.id.nsv_variant_solving_area)
+        nsvTasksScrollView = view.findViewById(R.id.nsv_tasks_scroll_view)
         tvVariantName = view.findViewById<TextView>(R.id.tv_variant_name_bs)
         tvVariantDescription = view.findViewById<TextView>(R.id.tv_variant_description_bs)
         llDynamicContentContainer = view.findViewById<LinearLayout>(R.id.ll_dynamic_content_container)
         btnFinishVariant = view.findViewById<Button>(R.id.btn_finish_variant)
         tvTimer = view.findViewById<TextView>(R.id.tv_timer)
+        btnTimerPauseResume = view.findViewById(R.id.btn_timer_pause_resume)
         
-        // Начальное состояние UI
         svInstructionsArea.visibility = View.VISIBLE
-        nsvVariantSolvingArea.visibility = View.GONE
+        flVariantSolvingArea.visibility = View.GONE
         tvTimer.visibility = View.GONE
-        pbVariantDetailLoading.visibility = View.VISIBLE // Показываем загрузку, пока основные данные не пришли
+        btnTimerPauseResume.visibility = View.GONE
+        pbVariantDetailLoading.visibility = View.VISIBLE
 
-        // Добавляем обработчик касаний для скрытия клавиатуры
         view.setOnTouchListener { v, event ->
             if (event.action == MotionEvent.ACTION_DOWN) {
                 val currentFocus = activity?.currentFocus
@@ -170,7 +165,7 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     }
                 }
             }
-            false // Не перехватываем событие полностью, чтобы другие слушатели могли сработать
+            false
         }
         
         return view
@@ -192,14 +187,12 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 }
                 bottomSheet.layoutParams = layoutParams
                 behavior.state = BottomSheetBehavior.STATE_EXPANDED
-                behavior.peekHeight = windowHeight // Or a very large value
+                behavior.peekHeight = windowHeight
                 behavior.isFitToContents = false
                 behavior.skipCollapsed = true
                  behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
                     override fun onStateChanged(bottomSheet: View, newState: Int) {
                         if (newState == BottomSheetBehavior.STATE_DRAGGING && behavior.state == BottomSheetBehavior.STATE_EXPANDED) {
-                           // Optional: Prevent dragging down from expanded state if truly fixed fullscreen needed
-                           // behavior.state = BottomSheetBehavior.STATE_EXPANDED
                         }
                     }
                     override fun onSlide(bottomSheet: View, slideOffset: Float) {}
@@ -218,7 +211,7 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        observeViewModel() // Наблюдение за ViewModel начнется сразу
+        observeViewModel()
 
         currentVariantId = arguments?.getInt(ARG_VARIANT_ID)
         if (currentVariantId == null) {
@@ -228,14 +221,14 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             return
         }
 
-        // Слушатель для кнопки подтверждения прочтения инструкций
+        currentVariantId?.let {
+             variantViewModel.fetchVariantDetails(it)
+        }
+
         btnAcknowledgeInstructions.setOnClickListener {
             instructionsAcknowledged = true
-            svInstructionsArea.visibility = View.GONE
-            // pbVariantDetailLoading остается, если данные еще грузятся
-            // nsvVariantSolvingArea и tvTimer станут видимы через checkAndPopulate, когда данные будут готовы
             Log.d(TAG_VARIANT_DETAIL_BS, "Инструкции подтверждены, вызываем checkAndPopulate")
-            checkAndPopulate(forceRepopulate = true) // Перерисовываем с учетом нового состояния
+            checkAndPopulate(forceRepopulate = true)
         }
         
         btnFinishVariant.setOnClickListener {
@@ -244,18 +237,40 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 variantViewModel.checkVariantAnswers(it) 
             } ?: Log.e(TAG_VARIANT_DETAIL_BS, "Невозможно завершить вариант, currentVariantId is null")
         }
+
+        btnTimerPauseResume.setOnClickListener {
+            isPaused = !isPaused
+            updatePauseState()
+        }
     }
 
     private fun startTimer() {
-        if (countDownTimer != null) return // Уже запущен
-        if (!instructionsAcknowledged || variantViewModel.variantCheckedState.value) {
-             Log.d(TAG_VARIANT_DETAIL_BS, "Таймер не запущен: инструкции не подтверждены (${instructionsAcknowledged}) или вариант уже проверен (${variantViewModel.variantCheckedState.value})")
-            return // Не запускаем таймер, если инструкции не подтверждены или вариант проверен
-        }
-        tvTimer.visibility = View.VISIBLE
         countDownTimer?.cancel()
-        countDownTimer = object : CountDownTimer(TIMER_DURATION_MS, 1000) {
+        if (!instructionsAcknowledged || variantViewModel.variantCheckedState.value || isPaused) {
+             Log.d(TAG_VARIANT_DETAIL_BS, "Таймер не запущен: инструкции ($instructionsAcknowledged), проверен (${variantViewModel.variantCheckedState.value}), на паузе ($isPaused)")
+            return
+        }
+
+        val startTime = if (timerHasStartedOnce) {
+            timeRemainingInMillis
+        } else {
+            currentVariantEntity?.remainingTimeMillis?.takeIf { it > 0 } ?: TIMER_DURATION_MS
+        }
+
+        if (startTime <= 0) {
+            tvTimer.text = "00:00:00"
+            return
+        }
+        
+        timeRemainingInMillis = startTime
+        timerHasStartedOnce = true
+        
+        tvTimer.visibility = View.VISIBLE
+        btnTimerPauseResume.visibility = View.VISIBLE
+
+        countDownTimer = object : CountDownTimer(startTime, 1000) {
             override fun onTick(millisUntilFinished: Long) {
+                timeRemainingInMillis = millisUntilFinished
                 val hours = TimeUnit.MILLISECONDS.toHours(millisUntilFinished)
                 val minutes = TimeUnit.MILLISECONDS.toMinutes(millisUntilFinished) % 60
                 val seconds = TimeUnit.MILLISECONDS.toSeconds(millisUntilFinished) % 60
@@ -263,9 +278,10 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             }
 
             override fun onFinish() {
+                timeRemainingInMillis = 0
                 tvTimer.text = "00:00:00"
-                // TODO: Добавить логику по завершению времени (например, авто-завершение варианта)
                 Toast.makeText(requireContext(), "Время вышло!", Toast.LENGTH_LONG).show()
+                 currentVariantId?.let { variantViewModel.checkVariantAnswers(it) }
             }
         }.start()
     }
@@ -274,19 +290,23 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         super.onDestroyView()
         countDownTimer?.cancel()
         currentVariantId?.let {
-            Log.d(TAG_VARIANT_DETAIL_BS, "onDestroyView: Synchronizing answers for variantId: $it")
-            variantViewModel.synchronizeAnswersWithServer(it)
+            Log.d(TAG_VARIANT_DETAIL_BS, "onDestroyView: Saving timer for variantId: $it")
+            variantViewModel.updateVariantTimer(it, timeRemainingInMillis)
         }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
-        Log.d(TAG_VARIANT_DETAIL_BS, "onDismiss called, consuming variant details.")
-        variantViewModel.consumeVariantDetails() // Сбрасываем состояние ViewModel
-        // Также останавливаем таймер, если он был запущен
+        Log.d(TAG_VARIANT_DETAIL_BS, "onDismiss called, consuming variant details and saving timer.")
+        currentVariantId?.let { variantViewModel.updateVariantTimer(it, timeRemainingInMillis) }
+        variantViewModel.consumeVariantDetails()
         countDownTimer?.cancel()
         countDownTimer = null
-        Log.d(TAG_VARIANT_DETAIL_BS, "Timer cancelled in onDismiss.")
+
+        timerHasStartedOnce = false
+        isPaused = false
+
+        Log.d(TAG_VARIANT_DETAIL_BS, "Timer cancelled and states reset in onDismiss.")
     }
 
     private fun observeViewModel() {
@@ -313,8 +333,6 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         variantViewModel.userAnswersForCurrentVariantLiveData.observe(viewLifecycleOwner) { resource ->
             Log.d(TAG_VARIANT_DETAIL_BS, "Observed userAnswersForCurrentVariantLiveData: type=${resource::class.simpleName}, data.size=${(resource.data as? Map<*,*>)?.size}, error=${resource.message}")
             currentUserAnswers = if (resource is Resource.Success) resource.data else null
-            // Вызываем checkAndPopulate всегда, когда обновляются ответы пользователя,
-            // так как это последний из основных блоков данных, который может прийти.
             checkAndPopulate()
         }
 
@@ -325,25 +343,25 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 tvTimer.visibility = View.GONE
                 countDownTimer?.cancel()
                 btnFinishVariant.isEnabled = false
-                btnAcknowledgeInstructions.visibility = View.GONE // Если вариант проверен, инструкции не нужны
+                btnTimerPauseResume.visibility = View.GONE
+                btnAcknowledgeInstructions.visibility = View.GONE
                 Log.d(TAG_VARIANT_DETAIL_BS, "Variant is checked, calling checkAndPopulate to show results.")
-                checkAndPopulate(forceRepopulate = true) // Обновляем UI, чтобы показать результаты
+                checkAndPopulate(forceRepopulate = true)
 
-                // СИНХРОНИЗАЦИЯ ПРИ ЗАВЕРШЕНИИ ВАРИАНТА
                 currentVariantId?.let { variantId ->
                     Log.d(TAG_VARIANT_DETAIL_BS, "Variant $variantId is checked. Synchronizing answers with server.")
-                    variantViewModel.synchronizeAnswersWithServer(variantId)
+                    variantViewModel.clearAnswersForCompletedVariant(variantId)
                 }
 
+                timeRemainingInMillis = TIMER_DURATION_MS
+                Log.d(TAG_VARIANT_DETAIL_BS, "Local timer value has been reset to default to prevent overwrite on dismiss.")
+
             } else {
-                // Если состояние сброшено на непроверенное (например, при загрузке нового варианта)
-                // checkAndPopulate() сам обработает состояние кнопки и таймера.
                 checkAndPopulate()
             }
         }
     }
     
-    // Переименована и изменена логика checkAndPopulate
     private fun checkAndPopulate(forceRepopulate: Boolean = false) {
         Log.d(TAG_VARIANT_DETAIL_BS, "checkAndPopulate called. Force: $forceRepopulate, Ack: $instructionsAcknowledged, Checked: $currentIsChecked")
 
@@ -352,89 +370,70 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         val tasks = currentTasks
         val answersMap = currentUserAnswers
 
-        val variantResource = variantViewModel.variantDetailsLiveData.value // для проверки состояния загрузки
+        val variantResource = variantViewModel.variantDetailsLiveData.value
         val textsResource = variantViewModel.sharedTextsLiveData.value
         val tasksResource = variantViewModel.tasksLiveData.value
         val answersResource = variantViewModel.userAnswersForCurrentVariantLiveData.value
 
-        // Все основные данные ДОЛЖНЫ БЫТЬ ЗАГРУЖЕНЫ (не null) для отображения контента решения
         val essentialDataAvailable = variant != null && texts != null && tasks != null && answersMap != null
         
-        // Лог перед основной логикой доступности кнопки - ПЕРЕМЕЩЕН ПОСЛЕ ОБЪЯВЛЕНИЯ essentialDataAvailable
         Log.d(TAG_VARIANT_DETAIL_BS, "checkAndPopulate - Conditions: currentIsChecked=$currentIsChecked, tasks.size=${tasks?.size}, essentialDataAvailable=$essentialDataAvailable, instructionsAcknowledged=$instructionsAcknowledged")
 
-        if (instructionsAcknowledged) {
-            if (essentialDataAvailable) {
-                pbVariantDetailLoading.visibility = View.GONE
-                nsvVariantSolvingArea.visibility = View.VISIBLE
-                llDynamicContentContainer.visibility = View.VISIBLE
-                
-                populateDynamicContent(variant!!, texts!!, tasks!!, answersMap!!, currentIsChecked)
+        val readyToShowSolving = instructionsAcknowledged && essentialDataAvailable
 
-                if (currentIsChecked) {
-                    btnFinishVariant.isEnabled = false
-                    btnFinishVariant.text = "Вариант проверен"
-                    countDownTimer?.cancel()
-                    tvTimer.visibility = View.GONE
-                    disableAnswerFields()
-                } else {
-                    btnFinishVariant.isEnabled = true // Может быть переопределено ниже, если вариант пуст
-                    btnFinishVariant.text = "Завершить вариант"
-                    if (tasks?.isNotEmpty() == true) { // Запускаем таймер только если есть задания
-                        startTimer()
-                    } else {
-                        tvTimer.visibility = View.GONE
-                        btnFinishVariant.isEnabled = false // Нельзя завершить пустой вариант
-                    }
-                }
-            } else {
-                // Данные еще не загружены или ошибка, но инструкции подтверждены
-                pbVariantDetailLoading.visibility = View.VISIBLE
-                nsvVariantSolvingArea.visibility = View.GONE
+        if (readyToShowSolving) {
+            svInstructionsArea.visibility = View.GONE
+            pbVariantDetailLoading.visibility = View.GONE
+            flVariantSolvingArea.visibility = View.VISIBLE
+
+            populateDynamicContent(variant!!, texts!!, tasks!!, answersMap!!, currentIsChecked)
+
+            if (currentIsChecked) {
+                btnFinishVariant.isEnabled = false
+                btnFinishVariant.text = "Вариант проверен"
+                countDownTimer?.cancel()
                 tvTimer.visibility = View.GONE
-                
-                // Проверяем, есть ли явные ошибки в ресурсах
-                if (variantResource is Resource.Error || textsResource is Resource.Error || tasksResource is Resource.Error || answersResource is Resource.Error) {
-                    pbVariantDetailLoading.visibility = View.GONE // Ошибка важнее прогресса
-                    val errorMsg = (variantResource as? Resource.Error)?.message ?:
-                                   (textsResource as? Resource.Error)?.message ?:
-                                   (tasksResource as? Resource.Error)?.message ?:
-                                   (answersResource as? Resource.Error)?.message ?: "Неизвестная ошибка загрузки данных."
-                    showErrorStateInSolvingArea(errorMsg)
+                btnTimerPauseResume.visibility = View.GONE
+                disableAnswerFields()
+            } else {
+                btnFinishVariant.isEnabled = true
+                btnFinishVariant.text = "Завершить вариант"
+                if (tasks?.isNotEmpty() == true) {
+                    updatePauseState()
                 } else {
-                     Log.d(TAG_VARIANT_DETAIL_BS, "Данные для решения варианта еще грузятся, инструкции подтверждены.")
-                     // Можно показать заглушку "Загрузка..." в nsvVariantSolvingArea, если нужно
-                     // llDynamicContentContainer.removeAllViews() // Очистить старое
-                     // llDynamicContentContainer.addView(createStyledTextView("Загрузка данных варианта...", isCentered = true))
+                    tvTimer.visibility = View.GONE
+                    btnTimerPauseResume.visibility = View.GONE
+                    btnFinishVariant.isEnabled = false
                 }
             }
-        } else { // Инструкции не подтверждены
+        } else {
+            flVariantSolvingArea.visibility = View.GONE
             svInstructionsArea.visibility = View.VISIBLE
-            nsvVariantSolvingArea.visibility = View.GONE
-            tvTimer.visibility = View.GONE
 
-            if (essentialDataAvailable) { // Данные загружены, можно начать
+            val hasError = variantResource is Resource.Error || textsResource is Resource.Error || tasksResource is Resource.Error || answersResource is Resource.Error
+            if (hasError) {
+                pbVariantDetailLoading.visibility = View.GONE
+                val errorMsg = (variantResource as? Resource.Error)?.message ?:
+                               (textsResource as? Resource.Error)?.message ?:
+                               (tasksResource as? Resource.Error)?.message ?:
+                               (answersResource as? Resource.Error)?.message ?: "Неизвестная ошибка загрузки данных."
+                Toast.makeText(context, "Ошибка: $errorMsg", Toast.LENGTH_LONG).show()
+                btnAcknowledgeInstructions.text = "Ошибка загрузки"
+                btnAcknowledgeInstructions.isEnabled = false
+            } else if (essentialDataAvailable) {
                 pbVariantDetailLoading.visibility = View.GONE
                 btnAcknowledgeInstructions.isEnabled = true
                 btnAcknowledgeInstructions.text = "Я прочитал(а) и готов(а) начать"
-            } else { // Данные еще грузятся или ошибка
-                 if (variantResource is Resource.Error || textsResource is Resource.Error || tasksResource is Resource.Error || answersResource is Resource.Error) {
-                    pbVariantDetailLoading.visibility = View.GONE
-                     // Показываем ошибку прямо на экране инструкций или общую
-                     Toast.makeText(context, "Не удалось загрузить данные варианта. Попробуйте позже.", Toast.LENGTH_LONG).show()
-                     btnAcknowledgeInstructions.text = "Ошибка загрузки"
-                     btnAcknowledgeInstructions.isEnabled = false
-                 } else {
-                    pbVariantDetailLoading.visibility = View.VISIBLE
-                    btnAcknowledgeInstructions.isEnabled = false
-                    btnAcknowledgeInstructions.text = "Загрузка данных..."
-                 }
+            } else {
+                pbVariantDetailLoading.visibility = View.VISIBLE
+                btnAcknowledgeInstructions.isEnabled = false
+                btnAcknowledgeInstructions.text = "Загрузка данных..."
             }
         }
     }
 
     private fun showErrorStateInSolvingArea(message: String) {
-        nsvVariantSolvingArea.visibility = View.VISIBLE // Показываем область решения, чтобы там отобразить ошибку
+        flVariantSolvingArea.visibility = View.VISIBLE
         llDynamicContentContainer.removeAllViews()
         val errorTextView = TextView(requireContext()).apply {
             text = message
@@ -445,13 +444,13 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         llDynamicContentContainer.addView(errorTextView)
         btnFinishVariant.isEnabled = false
         tvTimer.visibility = View.GONE
+        btnTimerPauseResume.visibility = View.GONE
     }
 
     private fun disableAnswerFields() {
         for (i in 0 until llDynamicContentContainer.childCount) {
             val view = llDynamicContentContainer.getChildAt(i)
-            if (view is ViewGroup && view.tag is Int) { // Ищем контейнер задания
-                // Ищем EditText внутри контейнера задания
+            if (view is ViewGroup && view.tag is Int) {
                 findEditTextsRecursively(view).forEach {
                     it.isFocusable = false
                     it.isClickable = false
@@ -482,30 +481,18 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         userAnswers: Map<Int, UserVariantTaskAnswerEntity>,
         isChecked: Boolean
     ) {
-        // Если контейнер уже отрисован и мы не в режиме проверки результатов (т.е. isChecked == false),
-        // то не перерисовываем всё полностью, чтобы не терять фокус EditText.
-        // Предполагается, что EditText сам содержит актуальный текст, введенный пользователем.
-        // Обновления userAnswers (например, с сервера при первоначальной загрузке)
-        // будут учтены при первой полной отрисовке (когда childCount == 0).
         if (llDynamicContentContainer.childCount > 0 && !isChecked) {
             Log.d(TAG_VARIANT_DETAIL_BS, "populateDynamicContent: Skipping full redraw for ongoing input. Child count: ${llDynamicContentContainer.childCount}, isChecked: $isChecked")
-            // ВАЖНО: Если бы нам нужно было ОБНОВИТЬ какие-то ДРУГИЕ части UI (не EditText)
-            // на основе изменений в userAnswers, пока isChecked=false, это нужно было бы делать здесь
-            // точечно, без removeAllViews(). Но сейчас такой потребности нет,
-            // так как основная проблема - потеря фокуса EditText.
-            return // Выходим, чтобы не перерисовывать
+            return
         }
 
-        // Если мы здесь, значит, это либо первая отрисовка, либо isChecked=true (показываем результаты),
-        // либо была запрошена принудительная перерисовка, требующая очистки.
         llDynamicContentContainer.removeAllViews()
-        displayedSharedTextIds.clear() // Очищаем перед заполнением
+        displayedSharedTextIds.clear()
         Log.d(TAG_VARIANT_DETAIL_BS, "populateDynamicContent: Performing full redraw. isChecked: $isChecked. SharedTexts: ${sharedTexts.size}, Tasks: ${tasks.size}, Answers: ${userAnswers.size}")
         
-        // --- Инструкции внутри варианта --- 
         var addedPart1Instruction = false
         var addedTask1_3Instruction = false
-        var addedPart2Instruction = false // Эта переменная относится к Части 2 (задание 27) и должна остаться
+        var addedPart2Instruction = false
         
         val textIdForTasks22_26 = tasks.find { 
             (it.egeNumber.startsWith("22") || it.egeNumber.startsWith("23") || it.egeNumber.startsWith("24") || it.egeNumber.startsWith("25") || it.egeNumber.startsWith("26")) && it.variantSharedTextId != null 
@@ -524,26 +511,21 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             addedPart1Instruction = true
         }
 
-        // Сначала отобразим все уникальные общие тексты, которые используются в заданиях,
-        // КРОМЕ текста для заданий 23-26, который будет вставлен после задания 22.
         val uniqueTextIdsInTasks = tasks.mapNotNull { it.variantSharedTextId }.distinct()
         val textsToDisplay = sharedTexts.filter { uniqueTextIdsInTasks.contains(it.variantSharedTextId) }
                                       .sortedBy { it.variantSharedTextId } 
 
         textsToDisplay.forEach { textEntity ->
-            // Текст для заданий 23-26 (textIdForTasks22_26) будет отображен отдельно, после задания 22.
             if (textEntity.variantSharedTextId == textIdForTasks22_26) {
-                return@forEach // Пропускаем этот текст здесь
+                return@forEach
             }
 
             if (displayedSharedTextIds.add(textEntity.variantSharedTextId)) { 
-                // Инструкция перед текстом для заданий 1-3 (если текст используется для них)
                 if (tasks.any { it.variantSharedTextId == textEntity.variantSharedTextId && it.orderInVariant <= 3 && it.orderInVariant >=1 } && !addedTask1_3Instruction) {
                     llDynamicContentContainer.addView(createStyledTextView("Прочитайте текст и выполните задания 1-3.", isBold = true, styleResId = android.R.style.TextAppearance_Material_Subhead, bottomMarginDp = 8))
                     addedTask1_3Instruction = true
                 }
                 
-                // Отображаем сам общий текст
                 val originalTextContent = textEntity.textContent ?: ""
                 val textToDisplay: CharSequence = if (originalTextContent.contains("{")) {
                     formatTextWithCurlyBraceHighlights(originalTextContent)
@@ -563,13 +545,12 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         var lastDisplayedOrder = 0
         val sortedTasks = tasks.sortedBy { it.orderInVariant }
         sortedTasks.forEach { taskEntity ->
-            // Инструкция к Части 2 перед 27 заданием
             if (taskEntity.orderInVariant == 27 && !addedPart2Instruction) {
                 addSeparator(llDynamicContentContainer)
                 llDynamicContentContainer.addView(createStyledTextView("Часть 2", styleResId = android.R.style.TextAppearance_Material_Title, isBold = true, isCentered = true, topMarginDp = 16, bottomMarginDp = 4))
                 llDynamicContentContainer.addView(createStyledTextView("Для ответа на задание 27 используйте БЛАНК ОТВЕТОВ № 2.", styleResId = android.R.style.TextAppearance_Material_Body2, isCentered = true, bottomMarginDp = 16))
                 addSeparator(llDynamicContentContainer)
-                addedPart2Instruction = true // Корректное использование addedPart2Instruction
+                addedPart2Instruction = true
             }
 
             val taskContainer = LinearLayout(requireContext()).apply {
@@ -578,12 +559,11 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
-                setPadding(0, 8, 0, 8) // Уменьшил отступы для контейнера задания
+                setPadding(0, 8, 0, 8)
                 tag = taskEntity.variantTaskId 
             }
 
             val taskFullTitle = SpannableString("Задание ${taskEntity.egeNumber ?: taskEntity.orderInVariant}. (${taskEntity.maxPoints} балл.) ${taskEntity.title ?: ""}")
-            // Можно добавить стили для частей заголовка, если нужно
             val tvTaskTitle = createStyledTextView(taskFullTitle, styleResId = android.R.style.TextAppearance_Material_Subhead, isBold = true, bottomMarginDp = 8)
             taskContainer.addView(tvTaskTitle)
 
@@ -603,17 +583,15 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
                 hint = "Введите ваш ответ"
-                id = View.generateViewId() // Генерируем ID для EditText
-                // Восстанавливаем ранее введенный ответ
+                id = View.generateViewId()
                 val userAnswerEntity = userAnswers[taskEntity.variantTaskId]
                 setText(userAnswerEntity?.userSubmittedAnswer ?: "")
                 
-                isEnabled = !isChecked // Блокируем, если вариант проверен
+                isEnabled = !isChecked
                 isFocusable = !isChecked
                 isClickable = !isChecked
                 isFocusableInTouchMode = !isChecked
 
-                // Отслеживаем фокус
                 setOnFocusChangeListener { _, hasFocus ->
                     if (hasFocus) {
                         lastFocusedTaskEditTextId = taskEntity.variantTaskId
@@ -621,12 +599,11 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     }
                 }
 
-                // Сохранение ответа пользователя при изменении текста
                 addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                     override fun afterTextChanged(s: Editable?) {
-                        if (!isChecked) { // Сохраняем только если вариант не проверен
+                        if (!isChecked) {
                             currentVariantId?.let {
                                 variantViewModel.saveUserAnswerAndCheck(
                                     variantId = it,
@@ -652,17 +629,16 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 }
 
                 if (isCorrect == true) {
-                    etAnswer.setBackgroundColor(getThemeColor(R.color.correct_answer_background_light)) // Use light version, dark will be picked by system
+                    etAnswer.setBackgroundColor(getThemeColor(R.color.correct_answer_background_light))
                     resultTextView.text = "Верно (+${points} балл(ов))"
                     resultTextView.setTextColor(getThemeColor(R.color.correct_answer_green))
                 } else {
-                    etAnswer.setBackgroundColor(getThemeColor(R.color.incorrect_answer_background_light)) // Use light version, dark will be picked by system
+                    etAnswer.setBackgroundColor(getThemeColor(R.color.incorrect_answer_background_light))
                     resultTextView.text = "Неверно (${points} балл(ов))"
                     resultTextView.setTextColor(getThemeColor(R.color.incorrect_answer_red))
                 }
                 taskContainer.addView(resultTextView)
 
-                // Кнопка/текст для показа правильного ответа и объяснения
                 val tvShowSolution = TextView(requireContext()).apply {
                     text = "Показать ответ и объяснение"
                     setTextColor(getThemeColor(R.color.show_answer_link_color))
@@ -678,15 +654,14 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     orientation = LinearLayout.VERTICAL
                     layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                     setPadding(8,4,8,8)
-                    setBackgroundColor(getThemeColor(R.color.solution_explanation_background_light)) // Use light version, dark will be picked by system
-                    visibility = View.GONE // По умолчанию скрыто
+                    setBackgroundColor(getThemeColor(R.color.solution_explanation_background_light))
+                    visibility = View.GONE
                     id = View.generateViewId()
                 }
                 
                 if (!taskEntity.solutionText.isNullOrBlank()) {
                     val tvCorrectAnswer = TextView(requireContext()).apply {
                         text = "Правильный ответ: ${taskEntity.solutionText}"
-                        // textAppearance = R.style.TextAppearance_MaterialComponents_Body1
                         setPadding(0,0,0,4)
                         id = View.generateViewId()
                     }
@@ -696,7 +671,6 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 if (!taskEntity.explanationText.isNullOrBlank()) {
                     val tvExplanation = TextView(requireContext()).apply {
                         text = "Объяснение: ${taskEntity.explanationText}"
-                        // textAppearance = R.style.TextAppearance_MaterialComponents_Body1
                          id = View.generateViewId()
                     }
                     solutionExplanationContainer.addView(tvExplanation)
@@ -709,16 +683,15 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                             if (solutionExplanationContainer.visibility == View.VISIBLE) View.GONE else View.VISIBLE
                     }
                 } else {
-                     tvShowSolution.visibility = View.GONE // Скрываем кнопку, если нечего показывать
+                     tvShowSolution.visibility = View.GONE
                 }
             }
 
             llDynamicContentContainer.addView(taskContainer)
 
-            // --- Вставка текста для заданий 23-26 ПОСЛЕ задания 22 ---
             if (taskEntity.egeNumber.startsWith("22") && textIdForTasks22_26 != null) {
                 val sharedTextForTasksAfter22 = sharedTexts.find { it.variantSharedTextId == textIdForTasks22_26 }
-                if (sharedTextForTasksAfter22 != null && displayedSharedTextIds.add(textIdForTasks22_26)) { // Проверяем, что еще не добавлен
+                if (sharedTextForTasksAfter22 != null && displayedSharedTextIds.add(textIdForTasks22_26)) {
                     addSeparator(llDynamicContentContainer) 
 
                     llDynamicContentContainer.addView(
@@ -735,36 +708,24 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     llDynamicContentContainer.addView(tvSharedTextInjected)
                 }
             }
-            // --- Конец вставки ---
 
-            // Добавляем разделитель после каждого задания (и вставленного блока текста), кроме последнего элемента в общем потоке
             if (taskEntity != sortedTasks.lastOrNull()) { 
-                // Если текущий элемент - задание 22 И текст для 23-26 был вставлен,
-                // И это задание 22 не является последним в общем списке заданий,
-                // то разделитель после текста уже как бы "внутри" блока задания 22.
-                // Следующий разделитель должен быть после следующего задания (23 и т.д.)
-                // Эта логика может потребовать небольшой доработки, чтобы избежать двойных разделителей или их отсутствия.
-                // Пока оставляем как есть, addSeparator(llDynamicContentContainer) сработает.
                  addSeparator(llDynamicContentContainer)
             }
             lastDisplayedOrder = taskEntity.orderInVariant
         }
 
-        // Финальное предупреждение
         addSeparator(llDynamicContentContainer)
         llDynamicContentContainer.addView(createStyledTextView(
             "Не забудьте перенести все ответы в бланк ответов № 1 (и № 2 для сочинения) в соответствии с инструкцией по выполнению работы. Проверьте, чтобы каждый ответ был записан в строке с номером соответствующего задания.",
             styleResId = android.R.style.TextAppearance_Material_Body2, 
             isBold = true, 
             topMarginDp = 16, 
-            bottomMarginDp = 24 // Увеличил нижний отступ
+            bottomMarginDp = 24
         ))
         
         Log.d(TAG_VARIANT_DETAIL_BS, "populateDynamicContent finished. Children in llDynamicContentContainer: ${llDynamicContentContainer.childCount}")
 
-        // Восстановление фокуса после ПОЛНОЙ перерисовки UI (например, при первой загрузке или при isChecked=true)
-        // Этот блок теперь будет иметь смысл только если populateDynamicContent действительно перерисовал все.
-        // Если мы вышли раньше из-за (llDynamicContentContainer.childCount > 0 && !isChecked), фокус и не должен был теряться.
         if (!isChecked && lastFocusedTaskEditTextId != null) {
             Log.d(TAG_VARIANT_DETAIL_BS, "Attempting to restore focus to EditText in task container with ID: $lastFocusedTaskEditTextId after full redraw.")
             val containerToFocus = llDynamicContentContainer.findViewWithTag<ViewGroup>(lastFocusedTaskEditTextId)
@@ -784,12 +745,9 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             } ?: run {
                 Log.w(TAG_VARIANT_DETAIL_BS, "Could not find task container with ID: $lastFocusedTaskEditTextId to restore focus.")
             }
-            // Очищать lastFocusedTaskEditTextId здесь не будем, так как если пользователь продолжит ввод
-            // в том же поле, оно должно остаться. Он сбросится при фокусе на другом поле.
         }
     }
 
-    // Вспомогательные функции для создания View
     private fun createStyledTextView(text: CharSequence, styleResId: Int = android.R.style.TextAppearance_Material_Body1, isBold: Boolean = false, isCentered: Boolean = false, topMarginDp: Int = 0, bottomMarginDp: Int = 8): TextView {
         return TextView(requireContext()).apply {
             this.text = text
@@ -807,7 +765,7 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             ).apply {
                 setMargins(0, topMarginPx, 0, bottomMarginPx)
             }
-            id = View.generateViewId() // Генерируем ID, чтобы избежать проблем с некоторыми UI тестами или другими операциями
+            id = View.generateViewId()
         }
     }
     
@@ -815,12 +773,12 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         val separator = View(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                1.dpToPx() // высота разделителя 1dp
+                1.dpToPx()
             ).apply {
-                val margin = 8.dpToPx() // отступы по 8dp сверху и снизу
+                val margin = 8.dpToPx()
                 setMargins(0, margin, 0, margin)
             }
-            setBackgroundColor(getThemeColor(R.color.divider_light)) // Use light version, dark will be picked by system
+            setBackgroundColor(getThemeColor(R.color.divider_light))
             id = View.generateViewId()
         }
         container.addView(separator)
@@ -828,16 +786,13 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     private fun formatFootnotes(text: String): SpannableString {
         val spannableString = SpannableString(text)
-        // Regex to find numbers in parentheses, e.g., (1), (12), [1], [12]
-        // Также обрабатываем случаи типа "текст(1)" или "текст[1]" без пробела
         val pattern = Pattern.compile("(\\s|\\[|\\()(\\d+)(\\]|\\))")
         val matcher = pattern.matcher(text)
 
         while (matcher.find()) {
-            val startIndex = matcher.start(2) // Начало только цифр
-            val endIndex = matcher.end(2)   // Конец только цифр
+            val startIndex = matcher.start(2)
+            val endIndex = matcher.end(2)
 
-            // Уменьшаем размер текста для цифр
             spannableString.setSpan(
                 TextAppearanceSpan(requireContext(), R.style.FootnoteText),
                 startIndex,
@@ -848,13 +803,30 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         return spannableString
     }
 
-    // Extension function для конвертации dp в px
     fun Int.dpToPx(): Int {
         return (this * resources.displayMetrics.density).toInt()
     }
 
     private fun getThemeColor(@ColorRes colorRes: Int): Int {
         return ContextCompat.getColor(requireContext(), colorRes)
+    }
+
+    private fun updatePauseState() {
+        if (isPaused) {
+            countDownTimer?.cancel()
+            nsvTasksScrollView.visibility = View.GONE
+            btnFinishVariant.visibility = View.GONE
+            btnTimerPauseResume.setImageResource(android.R.drawable.ic_media_play)
+            Log.d(TAG_VARIANT_DETAIL_BS, "Таймер на паузе. Осталось: $timeRemainingInMillis")
+        } else {
+            if (instructionsAcknowledged) {
+                 nsvTasksScrollView.visibility = View.VISIBLE
+                 btnFinishVariant.visibility = View.VISIBLE
+            }
+            btnTimerPauseResume.setImageResource(android.R.drawable.ic_media_pause)
+            startTimer()
+            Log.d(TAG_VARIANT_DETAIL_BS, "Таймер возобновлен.")
+        }
     }
 
     private fun createTaskTableLayout(context: Context, statement: String): View {
@@ -895,22 +867,22 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         for (line in lines) {
             if (line.isEmpty()) continue
 
-            if (!switchedToColumn2 && line.matches(Regex("^[А-ЯЁ]\\s*\\).*"))) { // A) B) C) etc.
+            if (!switchedToColumn2 && line.matches(Regex("^[А-ЯЁ]\\s*\\).*"))) {
                 column1Items.add(line)
-            } else if (line.matches(Regex("^\\d+\\s*\\).*"))) { // 1) 2) 3) etc.
+            } else if (line.matches(Regex("^\\d+\\s*\\).*"))) {
                 switchedToColumn2 = true
                 column2Items.add(line)
             } else if (switchedToColumn2) {
                 if (column2Items.isNotEmpty()) {
                     column2Items[column2Items.size - 1] = column2Items.last() + "\n" + line
                 } else {
-                     column2Items.add(line) // Should only happen if first line of col2 is not numbered (unlikely for task 8/22)
+                     column2Items.add(line)
                 }
             } else {
                 if (column1Items.isNotEmpty()) {
                     column1Items[column1Items.size - 1] = column1Items.last() + "\n" + line
                 } else {
-                    column1Items.add(line) // First line, doesn't match A) pattern
+                    column1Items.add(line)
                 }
             }
         }
@@ -923,9 +895,8 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         }
 
         if (column1Layout.childCount == 0 && column2Layout.childCount == 0 && statement.isNotEmpty()) {
-            // Fallback: if parsing failed, show original statement in one column
              val fallbackTextView = createStyledTextView(statement, styleResId = android.R.style.TextAppearance_Material_Body2, bottomMarginDp = 8)
-             mainLayout.addView(fallbackTextView) // Add directly to mainLayout
+             mainLayout.addView(fallbackTextView)
         } else {
             if (column1Layout.childCount > 0) horizontalLayout.addView(column1Layout)
             if (column2Layout.childCount > 0) horizontalLayout.addView(column2Layout)
@@ -937,27 +908,22 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     private fun formatTextWithCurlyBraceHighlights(text: String): SpannableString {
         Log.d(TAG_VARIANT_DETAIL_BS, "formatTextWithCurlyBraceHighlights - Input text: [$text]")
-        // Текст для отображения (без фигурных скобок)
         val displayText = text.replace(Regex("\\{([^}]+)\\}"), "$1")
         Log.d(TAG_VARIANT_DETAIL_BS, "formatTextWithCurlyBraceHighlights - Display text (after replace): [$displayText]")
         val spannableString = SpannableString(displayText)
     
-        // Паттерн для поиска слов в фигурных скобках в оригинальном тексте
         val pattern = Pattern.compile("\\{([^}]+)\\}")
-        val matcher = pattern.matcher(text) // Ищем в оригинальном тексте
+        val matcher = pattern.matcher(text)
     
-        var cumulativeOffset = 0 // Накопленное смещение из-за удаления скобок
+        var cumulativeOffset = 0
         var matchesFound = 0
     
         while (matcher.find()) {
             matchesFound++
-            val wordInBraces = matcher.group(0)!! // Например, "{слово}"
-            val wordOnly = matcher.group(1)!!     // Например, "слово"
+            val wordInBraces = matcher.group(0)!!
+            val wordOnly = matcher.group(1)!!
             Log.d(TAG_VARIANT_DETAIL_BS, "formatTextWithCurlyBraceHighlights - Match $matchesFound: wordInBraces='${wordInBraces}', wordOnly='${wordOnly}'")
     
-            // Начальная позиция слова (без скобок) в displayText
-            // matcher.start() - это начало "{слово}" в оригинальном тексте
-            // cumulativeOffset - это количество символов ({ и }), удаленных до этого момента
             val startInDisplayText = matcher.start() - cumulativeOffset
             val endInDisplayText = startInDisplayText + wordOnly.length
             Log.d(TAG_VARIANT_DETAIL_BS, "formatTextWithCurlyBraceHighlights - Calculated indices for displayText: start=$startInDisplayText, end=$endInDisplayText (cumulativeOffset=$cumulativeOffset)")
@@ -968,7 +934,7 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             } else {
                 Log.w(TAG_VARIANT_DETAIL_BS, "formatTextWithCurlyBraceHighlights - Invalid indices, skipping span for word '$wordOnly'")
             }
-            cumulativeOffset += 2 // Каждая пара {} удаляет 2 символа
+            cumulativeOffset += 2
         }
         if (matchesFound == 0) {
             Log.d(TAG_VARIANT_DETAIL_BS, "formatTextWithCurlyBraceHighlights - No matches found for {} pattern.")
@@ -977,9 +943,4 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         return spannableString
     }
 }
-// Helper extension function for Context to avoid nullable context
-// fun Context.dpToPx(dp: Int): Int {
-//     return (dp * resources.displayMetrics.density).toInt()
-// }
-// Note: createStyledTextView already handles dp to px conversion
  

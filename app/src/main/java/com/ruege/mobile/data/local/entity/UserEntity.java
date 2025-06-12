@@ -8,7 +8,7 @@ import androidx.room.Ignore;
 @Entity(tableName = "users")
 public class UserEntity {
 
-    @PrimaryKey(autoGenerate = true)
+    @PrimaryKey
     @ColumnInfo(name = "user_id")
     private long userId;
 
@@ -46,6 +46,17 @@ public class UserEntity {
     
     @Ignore
     public UserEntity(String username, String email, String avatarUrl, long createdAt, long lastLogin, String googleId) {
+        this.username = username;
+        this.email = email;
+        this.avatarUrl = avatarUrl;
+        this.createdAt = createdAt;
+        this.lastLogin = lastLogin;
+        this.googleId = googleId;
+    }
+
+    @Ignore
+    public UserEntity(long userId, String username, String email, String avatarUrl, long createdAt, long lastLogin, String googleId) {
+        this.userId = userId;
         this.username = username;
         this.email = email;
         this.avatarUrl = avatarUrl;

@@ -17,8 +17,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.tabs.TabLayoutMediator
 import com.ruege.mobile.R
-import com.ruege.mobile.data.local.entity.ProgressEntity // Предполагаем, что данные из ProgressEntity
-import com.ruege.mobile.model.PracticeStatisticItem // Из нашего адаптера
+import com.ruege.mobile.data.local.entity.ProgressEntity
+import com.ruege.mobile.model.PracticeStatisticItem
 import com.ruege.mobile.ui.adapter.PracticeStatisticsAdapter
 import com.ruege.mobile.ui.adapter.PracticeStatisticsPagerAdapter
 import com.ruege.mobile.ui.viewmodel.PracticeStatisticsViewModel
@@ -33,7 +33,6 @@ class PracticeStatisticsBottomSheetDialogFragment : BottomSheetDialogFragment() 
     private var _binding: FragmentPracticeStatisticsBinding? = null
     private val binding get() = _binding!!
 
-    // Инжектируем ViewModel
     private val practiceStatisticsViewModel: PracticeStatisticsViewModel by activityViewModels()
 
     private lateinit var statisticsAdapter: PracticeStatisticsAdapter
@@ -42,12 +41,10 @@ class PracticeStatisticsBottomSheetDialogFragment : BottomSheetDialogFragment() 
     private var pbLoading: ProgressBar? = null
     private var tvEmpty: TextView? = null
 
-    // View для нового макета (fragment_practice_statistics.xml)
     private var viewPager: androidx.viewpager2.widget.ViewPager2? = null
     private var tabLayout: com.google.android.material.tabs.TabLayout? = null
     private var tvStatisticsTitle: TextView? = null
     private var cardOverallStats: androidx.cardview.widget.CardView? = null
-    // ... другие View из cardOverallStats, если нужны прямые ссылки ...
     private var tvError: TextView? = null
 
     override fun onCreateView(
@@ -61,29 +58,23 @@ class PracticeStatisticsBottomSheetDialogFragment : BottomSheetDialogFragment() 
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // _binding = BottomSheetPracticeStatisticsBinding.bind(view) // Удаляем эту строку
 
         setupViewPagerAndTabs()
         observeOverallStatistics()
-        // observeProgressData() // Удаляем или комментируем, так как ViewModel изменился
     }
 
     private fun observeOverallStatistics() {
         viewLifecycleOwner.lifecycleScope.launch {
-            // Используем collect, так как practiceStatisticsViewModel.overallStatisticsUiModel теперь LiveData
             practiceStatisticsViewModel.overallStatisticsUiModel.observe(viewLifecycleOwner) { stats ->
                 if (stats != null) {
-                    binding.tvAttemptCount.text = stats.totalAttempts.toString() // Прямой доступ через binding
-                    binding.tvCorrectCount.text = stats.correctAttempts.toString() // Прямой доступ через binding
-                    binding.tvSuccessRate.text = "${stats.successRate}%" // Прямой доступ через binding
-                    binding.progressOverall.progress = stats.successRate          // Прямой доступ через binding
-                    binding.cardOverallStats.visibility = View.VISIBLE // Показываем карточку
+                    binding.tvAttemptCount.text = stats.totalAttempts.toString()
+                    binding.tvCorrectCount.text = stats.correctAttempts.toString()
+                    binding.tvSuccessRate.text = "${stats.successRate}%"
+                    binding.progressOverall.progress = stats.successRate
+                    binding.cardOverallStats.visibility = View.VISIBLE
                     binding.tvError.visibility = View.GONE
                 } else {
-                    binding.cardOverallStats.visibility = View.GONE // Скрываем, если нет данных
-                    // Можно показать tvError с сообщением, если stats == null долгое время
-                    // binding.tvError.text = "Данные общей статистики отсутствуют."
-                    // binding.tvError.visibility = View.VISIBLE
+                    binding.cardOverallStats.visibility = View.GONE
                 }
             }
         }
@@ -102,50 +93,21 @@ class PracticeStatisticsBottomSheetDialogFragment : BottomSheetDialogFragment() 
         }.attach()
     }
 
-    // TODO: Этот метод нужно будет адаптировать или удалить,
-    // так как RecyclerView теперь будет внутри ViewPager
-    /*
-    private fun setupRecyclerView() {
-        statisticsAdapter = PracticeStatisticsAdapter(emptyList()) // Инициализируем пустым списком
-        rvStatistics?.apply {
-            adapter = statisticsAdapter
-            layoutManager = LinearLayoutManager(context)
-        }
-    }
-    */
-
-    // Пример метода для обновления общей статистики
     private fun updateOverallStatistics(progressEntities: List<ProgressEntity>) {
-        // Найдите нужные TextView внутри cardOverallStats
         val tvAttemptCount: TextView? = view?.findViewById(R.id.tvAttemptCount)
         val tvCorrectCount: TextView? = view?.findViewById(R.id.tvCorrectCount)
         val tvSuccessRate: TextView? = view?.findViewById(R.id.tvSuccessRate)
         val progressOverall: ProgressBar? = view?.findViewById(R.id.progressOverall)
 
-        // TODO: Рассчитать общую статистику на основе PracticeAttemptEntity или PracticeStatisticsEntity.
-        // Текущая ProgressEntity не содержит достаточно данных для детальной статистики.
-        // Ниже приведены заглушки.
+        var totalAttempts = 0
+        var totalCorrect = 0
 
-        var totalAttempts = 0 // TODO: Получить из агрегированных данных
-        var totalCorrect = 0  // TODO: Получить из агрегированных данных
-
-        // Пример: агрегация по ProgressEntity (очень упрощенно, только для примера)
-        // Не используйте это в продакшене для точной статистики попыток.
-        // totalAttempts = progressEntities.count { it.contentId.startsWith("task_group_") && it.percentage > 0 } 
-        // totalCorrect = progressEntities.count { it.contentId.startsWith("task_group_") && it.percentage == 100 }
-        
         val overallSuccessRate = if (totalAttempts > 0) (totalCorrect * 100 / totalAttempts) else 0
 
-        tvAttemptCount?.text = totalAttempts.toString() 
+        tvAttemptCount?.text = totalAttempts.toString()
         tvCorrectCount?.text = totalCorrect.toString()
         tvSuccessRate?.text = "$overallSuccessRate%"
         progressOverall?.progress = overallSuccessRate
-
-        // Если более точных данных пока нет, можно оставить так:
-        // tvAttemptCount?.text = "N/A"
-        // tvCorrectCount?.text = "N/A"
-        // tvSuccessRate?.text = "N/A"
-        // progressOverall?.progress = 0
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
@@ -171,7 +133,6 @@ class PracticeStatisticsBottomSheetDialogFragment : BottomSheetDialogFragment() 
                         if (newState == BottomSheetBehavior.STATE_HIDDEN) {
                             dismiss()
                         }
-                        // Log.d("BottomSheetBehavior", "New state: $newState") // Раскомментировать для отладки
                     }
                     override fun onSlide(bottomSheet: View, slideOffset: Float) {}
                 })

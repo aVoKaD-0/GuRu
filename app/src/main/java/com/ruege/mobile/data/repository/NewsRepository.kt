@@ -1,12 +1,13 @@
 package com.ruege.mobile.data.repository
 
-import android.util.Log
 import com.ruege.mobile.data.local.dao.NewsDao
 import com.ruege.mobile.data.local.entity.NewsEntity
 import com.ruege.mobile.data.network.api.NewsApiService
+import com.ruege.mobile.utilss.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,104 +17,69 @@ class NewsRepository @Inject constructor(
     private val newsApiService: NewsApiService
 ) {
 
-    private val TAG = "NewsRepository"
-    private val DEFAULT_USER_ID = 1L // Заглушка
-
     fun getAllNewsStream(): Flow<List<NewsEntity>> {
-        Log.d(TAG, "Getting all news stream from DAO")
-        return newsDao.getAllNews() // Убедимся, что NewsDao.getAllNews() возвращает Flow
+        Timber.d("Getting all news stream from DAO")
+        return newsDao.getAllNews()
     }
 
-    suspend fun refreshNews() {
-        withContext(Dispatchers.IO) {
+    suspend fun refreshNews(): Resource<Unit> {
+        return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Refreshing news data from network...")
-                
-                // Получаем данные из сети
-                val response = newsApiService.getNews() // Теперь вызываем напрямую
-                
+                Timber.d("Refreshing news data from network...")
+                val response = newsApiService.getNews()
+
                 if (response.isSuccessful && response.body() != null) {
                     val newsDtos = response.body()!!
-                    val newsEntities = newsDtos.map { it.toEntity() } // Используем Kotlin map
+                    val newsEntities = newsDtos.map { it.toEntity() }
                     
-                    // Сначала очищаем старые данные
-                    newsDao.deleteAll()
-                    Log.d(TAG, "News table cleared before inserting new data from network")
-                    
-                    // Сохраняем в БД
                     newsDao.insertAll(newsEntities)
                     
-                    Log.d(TAG, "Successfully refreshed ${newsEntities.size} news items from network")
+                    Timber.d("Successfully refreshed ${newsEntities.size} news items from network")
+                    Resource.Success(Unit)
                 } else {
-                    // Если не удалось получить данные из сети, просто логируем ошибку
-                    Log.w(TAG, "Network request failed with code: ${response.code()}. NO mock data will be loaded.")
-                    
-                    // Очищаем таблицу, чтобы убрать старые данные
-                    newsDao.deleteAll()
-                    Log.d(TAG, "News table cleared after network error")
+                    Timber.w("Network request failed with code: ${response.code()}")
+                    Resource.Error("Не удалось загрузить новости (код: ${response.code()})", null)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing news from network", e)
-                // Очищаем таблицу, чтобы убрать старые данные
-                try {
-                    newsDao.deleteAll()
-                    Log.d(TAG, "News table cleared after exception")
-                } catch (e2: Exception) {
-                    Log.e(TAG, "Error clearing news table after exception", e2)
-                }
+                Timber.e(e, "Error refreshing news from network")
+                Resource.Error("Ошибка обновления новостей: ${e.message}", null)
             }
         }
     }
     
-    suspend fun refreshLatestNews(limit: Int = 7) {
-        withContext(Dispatchers.IO) {
+    suspend fun refreshLatestNews(limit: Int = 7): Resource<Unit> {
+        return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Refreshing latest news data from network...")
-                
-                // Получаем последние новости из сети
+                Timber.d("Refreshing latest news data from network...")
                 val response = newsApiService.getLatestNews(limit)
                 
                 if (response.isSuccessful && response.body() != null) {
                     val newsDtos = response.body()!!
                     val newsEntities = newsDtos.map { it.toEntity() }
                     
-                    // Сначала очищаем старые данные
-                    newsDao.deleteAll()
-                    Log.d(TAG, "News table cleared before inserting latest news from network")
-                    
-                    // Сохраняем в БД
                     newsDao.insertAll(newsEntities)
                     
-                    Log.d(TAG, "Successfully refreshed ${newsEntities.size} latest news items from network")
+                    Timber.d("Successfully refreshed ${newsEntities.size} latest news items from network")
+                    Resource.Success(Unit)
                 } else {
-                    // Если не удалось получить данные из сети, просто логируем ошибку
-                    Log.w(TAG, "Network request for latest news failed with code: ${response.code()}. NO mock data will be loaded.")
-                    
-                    // Очищаем таблицу, чтобы убрать старые данные
-                    newsDao.deleteAll()
-                    Log.d(TAG, "News table cleared after network error")
+                    Timber.w("Network request for latest news failed with code: ${response.code()}")
+                    Resource.Error("Не удалось загрузить последние новости (код: ${response.code()})", null)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing latest news from network", e)
-                // Очищаем таблицу, чтобы убрать старые данные
-                try {
-                    newsDao.deleteAll()
-                    Log.d(TAG, "News table cleared after exception")
-                } catch (e2: Exception) {
-                    Log.e(TAG, "Error clearing news table after exception", e2)
-                }
+                Timber.e(e, "Error refreshing latest news from network")
+                Resource.Error("Ошибка обновления последних новостей: ${e.message}", null)
             }
         }
     }
 
     suspend fun clearAllNews() {
-        withContext(Dispatchers.IO) { // Используем withContext
+        withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Clearing all news from database...")
+                Timber.d("Clearing all news from database...")
                 newsDao.deleteAll()
-                Log.d(TAG, "News table cleared.")
+                Timber.d("News table cleared.")
             } catch (e: Exception) {
-                Log.e(TAG, "Error clearing news table", e)
+                Timber.e(e, "Error clearing news table")
             }
         }
     }

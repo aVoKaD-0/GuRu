@@ -13,7 +13,7 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.ruege.mobile.R
 import com.ruege.mobile.ui.adapter.StatisticsPagerAdapter
-import com.ruege.mobile.viewmodel.PracticeViewModel
+import com.ruege.mobile.ui.viewmodel.PracticeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import java.text.DecimalFormat
 
@@ -42,7 +42,6 @@ class PracticeStatisticsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        // Инициализация представлений
         tvAttemptCount = view.findViewById(R.id.tvAttemptCount)
         tvCorrectCount = view.findViewById(R.id.tvCorrectCount)
         tvSuccessRate = view.findViewById(R.id.tvSuccessRate)
@@ -60,7 +59,6 @@ class PracticeStatisticsFragment : Fragment() {
         val pagerAdapter = StatisticsPagerAdapter(this)
         viewPager.adapter = pagerAdapter
         
-        // Связывание TabLayout с ViewPager2
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = when (position) {
                 0 -> "По номерам"
@@ -71,24 +69,20 @@ class PracticeStatisticsFragment : Fragment() {
     }
 
     private fun observeViewModel() {
-        // Отображение общего количества попыток
         viewModel.totalAttempts.observe(viewLifecycleOwner) { count ->
             tvAttemptCount.text = count.toString()
             updateSuccessRate()
         }
         
-        // Отображение количества правильных ответов
         viewModel.totalCorrectAttempts.observe(viewLifecycleOwner) { count ->
             tvCorrectCount.text = count.toString()
             updateSuccessRate()
         }
         
-        // Отображение состояния загрузки
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
             progressLoading.visibility = if (isLoading) View.VISIBLE else View.GONE
         }
         
-        // Отображение ошибок
         viewModel.error.observe(viewLifecycleOwner) { error ->
             if (error.isNullOrEmpty()) {
                 tvError.visibility = View.GONE
@@ -106,7 +100,6 @@ class PracticeStatisticsFragment : Fragment() {
             tvSuccessRate.text = "${formatter.format(successRate)}%"
             progressOverall.progress = successRate.toInt()
             
-            // Изменение цвета прогресс-бара в зависимости от успешности
             val colorResId = when {
                 successRate >= 80 -> android.R.color.holo_green_dark
                 successRate >= 50 -> android.R.color.holo_orange_dark

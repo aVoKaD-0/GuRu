@@ -7,7 +7,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.ruege.mobile.databinding.FragmentStatisticsByTypeBinding // Предполагаем такой layout
+import com.ruege.mobile.databinding.FragmentStatisticsByTypeBinding 
 import com.ruege.mobile.ui.adapter.PracticeStatisticsAdapter
 import com.ruege.mobile.ui.viewmodel.PracticeStatisticsViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -43,18 +43,15 @@ class StatisticsByNumberFragment : Fragment() {
         binding.recyclerStatistics.apply {
             adapter = statisticsAdapter
             layoutManager = LinearLayoutManager(context)
-            // TODO: Добавить разделители, если нужно
         }
     }
 
     private fun observeTaskStatistics() {
-        // Используем viewLifecycleOwner.lifecycleScope.launchWhenStarted
-        // чтобы гарантировать, что код выполнится когда view готово и lifecycle как минимум STARTED
         viewLifecycleOwner.lifecycleScope.launchWhenStarted {
             practiceStatisticsViewModel.allTaskStatistics.observe(viewLifecycleOwner) { statsList ->
                 if (statsList != null && statsList.isNotEmpty()) {
                     android.util.Log.d("StatsByNumberFrag", "Observed data, submitting to adapter. Count: ${statsList.size}")
-                    statisticsAdapter.submitList(statsList.toList()) // toList() для создания новой копии
+                    statisticsAdapter.submitList(statsList.toList())
                     binding.tvEmptyStatistics.visibility = View.GONE
                     binding.recyclerStatistics.visibility = View.VISIBLE
                 } else {
@@ -63,7 +60,6 @@ class StatisticsByNumberFragment : Fragment() {
                     binding.recyclerStatistics.visibility = View.GONE
                 }
             }
-            // Дополнительно, если LiveData уже имеет значение при старте корутины
             practiceStatisticsViewModel.allTaskStatistics.value?.let { currentStats ->
                 if (statisticsAdapter.currentList.isEmpty() && currentStats.isNotEmpty()) {
                     android.util.Log.d("StatsByNumberFrag", "Initial data (on launchWhenStarted) found in LiveData, submitting to adapter. Count: ${currentStats.size}")

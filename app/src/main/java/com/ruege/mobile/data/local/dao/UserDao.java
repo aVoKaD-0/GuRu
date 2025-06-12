@@ -53,6 +53,9 @@ public interface UserDao {
     @Query("SELECT * FROM users LIMIT 1")
     UserEntity getFirstUser();
     
+    @Query("SELECT * FROM users LIMIT 1")
+    kotlinx.coroutines.flow.Flow<UserEntity> getFirstUserFlow();
+    
     /**
      * Удаляет всех пользователей из таблицы.
      * Используется при выходе из аккаунта.

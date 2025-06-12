@@ -1,17 +1,19 @@
 package com.ruege.mobile.data.network.dto.request
 
-import com.google.gson.annotations.SerializedName
+import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 
 /**
  * DTO для PracticeAttemptEntity при синхронизации.
  */
+@JsonClass(generateAdapter = true)
 data class PracticeAttemptSyncDto(
-    @SerializedName("attempt_id_local")
+    @field:Json(name = "attempt_id_local")
     val attemptIdLocal: Long,
-    @SerializedName("task_id")
+    @field:Json(name = "task_id")
     val taskId: Int,
-    @SerializedName("is_correct")
+    @field:Json(name = "is_correct")
     val isCorrect: Boolean,
-    @SerializedName("attempt_date")
+    @field:Json(name = "attempt_date")
     val attemptDate: Long
 ) 

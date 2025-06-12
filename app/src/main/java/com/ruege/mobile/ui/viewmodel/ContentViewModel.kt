@@ -23,6 +23,7 @@
     import kotlinx.coroutines.delay
     import kotlinx.coroutines.flow.Flow
     import kotlinx.coroutines.flow.catch
+    import kotlinx.coroutines.flow.first
     import kotlinx.coroutines.flow.firstOrNull
     import kotlinx.coroutines.flow.map
     import kotlinx.coroutines.flow.onStart
@@ -31,6 +32,8 @@
     import timber.log.Timber
     import javax.inject.Inject
     import kotlinx.coroutines.flow.collect
+    import com.ruege.mobile.model.ContentItem
+    import com.ruege.mobile.utilss.Resource
 
     /**
      * ViewModel для управления основным контентом (теория, задания и т.д.)
@@ -129,88 +132,69 @@
 
         private val taskDetailTextIdCache = mutableMapOf<String, String?>()
 
+        private val _theoryItemsState = MutableLiveData<Resource<List<ContentItem>>>()
+        val theoryItemsState: LiveData<Resource<List<ContentItem>>> = _theoryItemsState
+
+        private val _taskItemsState = MutableLiveData<Resource<List<ContentItem>>>()
+        val taskItemsState: LiveData<Resource<List<ContentItem>>> = _taskItemsState
+
+        private val _isAnyTaskSelected = MutableLiveData<Boolean>()
+        val isAnyTaskSelected: LiveData<Boolean> = _isAnyTaskSelected
+
+        private val _batchDownloadTasksResult = MutableLiveData<Resource<String>>()
+        val batchDownloadTasksResult: LiveData<Resource<String>> = _batchDownloadTasksResult
+
+        private val hasMoreTasksByCategory = mutableMapOf<String, Boolean>()
+
         init {
-            loadInitialContent()
+            _theoryItemsState.value = Resource.Loading()
+            _taskItemsState.value = Resource.Loading()
+            
+            theoryTopicsLiveData.observeForever { entities ->
+                _theoryItemsState.value = Resource.Success(entities.map { it.toContentItem() })
+            }
+
+            tasksTopicsLiveData.observeForever { entities ->
+                _taskItemsState.value = Resource.Success(entities.map { it.toContentItem() })
+            }
         }
 
         /**
-         * Загружает начальные данные контента (теория и задания) при запуске.
+         * Запускает фоновую синхронизацию начальных данных (теория, задания) с сервером.
+         * Вызывается один раз при старте приложения из MainActivity.
          */
-        fun loadInitialContent() {
+        fun syncInitialContent() {
             viewModelScope.launch {
-                Log.d(TAG, "Loading initial content")
-                Timber.d("Начинаем загрузку начальных данных")
+                Log.d(TAG, "Syncing initial content...")
                 try {
-                    _isLoading.value = true
-                    Timber.d("Установлен статус загрузки: true")
-                    
-                    Timber.d("Загружаем темы теории...")
                     contentRepository.refreshTheoryTopics()
-                    Timber.d("Темы теории загружены успешно")
-                    
-                    Timber.d("Загружаем темы сочинений...")
                     contentRepository.refreshEssayTopics()
-                    Timber.d("Темы сочинений загружены успешно")
-                    
-                    Timber.d("Загружаем группы заданий...")
                     contentRepository.refreshTasksTopics()
-                    Timber.d("Группы заданий загружены успешно")
-                    
-                    Timber.d("Устанавливаем статус загрузки: false")
-                    _isLoading.value = false
-                    
-                    delay(3000) 
-                    normalizeAllTaskCounts()
+                    Timber.d("Initial content sync finished.")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error loading initial content: ${e.message}", e)
-                    Timber.e(e, "Ошибка загрузки начальных данных: %s", e.message)
-                    _errorMessage.value = "Ошибка загрузки контента: ${e.message}"
-                    Timber.d("Устанавливаем статус загрузки: false из-за ошибки")
-                    _isLoading.value = false
+                    Log.e(TAG, "Error syncing initial content: ${e.message}", e)
+                    _theoryItemsState.postValue(Resource.Error("Ошибка синхронизации", _theoryItemsState.value?.data))
+                    _taskItemsState.postValue(Resource.Error("Ошибка синхронизации", _taskItemsState.value?.data))
                 }
             }
         }
         
         /**
-         * Загружает только темы теории.
+         * Отображает темы теории из уже имеющихся данных.
+         * Вызывается при переключении на вкладку.
          */
         fun loadTheoryTopicsOnly() {
-            viewModelScope.launch {
-                try {
-                    Log.d(TAG, "Loading only theory topics")
-                    _isLoading.value = true
-                    
-                    contentRepository.refreshTheoryTopics()
-                    
-                    _isLoading.value = false
-                    Log.d(TAG, "Theory topics loaded successfully")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading theory topics: ${e.message}", e)
-                    _errorMessage.value = "Ошибка загрузки тем теории: ${e.message}"
-                    _isLoading.value = false
-                }
-            }
+            _theoryItemsState.value = _theoryItemsState.value
+            Timber.d("Displaying current theory topics.")
         }
         
         /**
-         * Загружает только группы заданий.
+         * Отображает группы заданий из уже имеющихся данных.
+         * Вызывается при переключении на вкладку.
          */
         fun loadTasksTopicsOnly() {
-            viewModelScope.launch {
-                try {
-                    Log.d(TAG, "Loading only tasks topics")
-                    _isLoading.value = true
-                    
-                    contentRepository.refreshTasksTopics()
-                    
-                    _isLoading.value = false
-                    Log.d(TAG, "Tasks topics loaded successfully")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading tasks topics: ${e.message}", e)
-                    _errorMessage.value = "Ошибка загрузки групп заданий: ${e.message}"
-                    _isLoading.value = false
-                }
-            }
+            _taskItemsState.value = _taskItemsState.value
+            Timber.d("Displaying current task topics.")
         }
 
         /**
@@ -340,7 +324,9 @@
                                 
                                 _tasks.value = tasks
                                 
-                                _hasMoreTasksToLoad.value = contentRepository.hasMoreTasksToLoad(categoryId)
+                                val hasMore = contentRepository.hasMoreTasksToLoad(categoryId)
+                                hasMoreTasksByCategory[categoryId] = hasMore
+                                _hasMoreTasksToLoad.value = hasMore
                             }
                             is Result.Failure -> {
                                 val error = result.exception
@@ -692,9 +678,8 @@
                 return
             }
             
-            if (!contentRepository.hasMoreTasksToLoad(categoryId)) {
-                Timber.d("Пропускаем загрузку дополнительных заданий - нет дополнительных страниц")
-                _hasMoreTasksToLoad.value = false
+            if (!hasMoreTasksToLoad(categoryId)) {
+                Timber.d("Пропускаем загрузку дополнительных заданий - для категории $categoryId больше нет страниц (согласно VM)")
                 return
             }
             
@@ -702,30 +687,34 @@
                 try {
                     Timber.d("Загрузка следующей страницы заданий для категории $categoryId")
                     _isLoadingMoreTasks.value = true
+                    val currentTaskCount = _tasks.value?.size ?: 0
                     
                     contentRepository.loadMoreTasksByCategory(categoryId).collect { result ->
                         _isLoadingMoreTasks.value = false
                         
                         when (result) {
                             is Result.Success -> {
-                                var additionalTasks = result.data
-                                Timber.d("Получено ${additionalTasks.size} дополнительных заданий для категории $categoryId")
+                                var newTotalTasks = result.data
+                                Timber.d("Получено ${newTotalTasks.size} заданий от репозитория для категории $categoryId. Текущее кол-во: $currentTaskCount")
                                 
-                                if (additionalTasks.isNotEmpty()) {
-                                    additionalTasks = enrichTasksWithSolvedStatus(additionalTasks, categoryId)
+                                if (newTotalTasks.size > currentTaskCount) {
+                                    newTotalTasks = enrichTasksWithSolvedStatus(newTotalTasks, categoryId)
 
-                                    val currentTasks = _tasks.value ?: emptyList()
-                                    val updatedTasks = currentTasks + additionalTasks
-                                    
-                                    tasksCategoryCache[categoryId] = updatedTasks
+                                    tasksCategoryCache[categoryId] = newTotalTasks
                                     tasksCacheTimestamps[categoryId] = System.currentTimeMillis()
                                     
-                                    _tasks.value = updatedTasks
+                                    _tasks.value = newTotalTasks
                                     
-                                    Timber.d("Список заданий обновлен, теперь содержит ${updatedTasks.size} заданий")
+                                    Timber.d("Список заданий обновлен, теперь содержит ${newTotalTasks.size} заданий")
+                                    val hasMoreFromRepo = contentRepository.hasMoreTasksToLoad(categoryId)
+                                    hasMoreTasksByCategory[categoryId] = hasMoreFromRepo
+                                    if(!hasMoreFromRepo) {
+                                        Timber.d("Репозиторий подтвердил, что для категории $categoryId больше нет страниц.")
+                                    }
+
                                 } else {
-                                    Timber.d("Получен пустой список дополнительных заданий")
-                                    _hasMoreTasksToLoad.value = false
+                                    Timber.d("Количество заданий не увеличилось. Считаем, что для категории $categoryId больше заданий нет.")
+                                    hasMoreTasksByCategory[categoryId] = false
                                 }
                             }
                             is Result.Failure -> {
@@ -750,19 +739,8 @@
          * Проверяет, есть ли еще задания для загрузки для указанной категории
          */
         fun hasMoreTasksToLoad(categoryId: String): Boolean {
-            val currentTasks = _tasks.value
-            
-            if (currentTasks == null || currentTasks.isEmpty()) {
-                Timber.d("hasMoreTasksToLoad: Нет текущих заданий для категории $categoryId, возвращаем true")
-                return true
-            }
-            
-            if (currentTasks.size >= 50) {
-                Timber.d("hasMoreTasksToLoad: Уже загружено ${currentTasks.size} заданий для категории $categoryId, возможно больше нет")
-            }
-            
-            val hasMore = contentRepository.hasMoreTasksToLoad(categoryId)
-            Timber.d("hasMoreTasksToLoad: Категория $categoryId, результат: $hasMore")
+            val hasMore = hasMoreTasksByCategory.getOrDefault(categoryId, true)
+            Timber.d("hasMoreTasksToLoad: Категория $categoryId, результат из VM: $hasMore")
             return hasMore
         }
         
@@ -781,7 +759,11 @@
          */
         fun resetTaskPagination(categoryId: String? = null) {
             contentRepository.resetTaskPagination(categoryId)
-            _hasMoreTasksToLoad.value = true
+            if (categoryId != null) {
+                hasMoreTasksByCategory[categoryId] = true
+            } else {
+                hasMoreTasksByCategory.clear()
+            }
             Timber.d("Сброшена информация о пагинации ${if (categoryId != null) "для категории $categoryId" else "для всех категорий"}")
         }
 
@@ -798,6 +780,7 @@
                     
                     tasksCategoryCache.clear()
                     tasksCacheTimestamps.clear()
+                    hasMoreTasksByCategory.clear()
                     
                     contentRepository.resetTaskPagination() 
                     
@@ -809,39 +792,6 @@
                     Log.e(TAG, "Error during forced sync: ${e.message}", e)
                     _errorMessage.value = "Ошибка синхронизации: ${e.message}"
                     _isLoading.value = false
-                }
-            }
-        }
-
-        /**
-         * Нормализует количество заданий во всех категориях.
-         * Это полезно при первом запуске или если произошла ошибка в отображении количества заданий.
-         */
-        fun normalizeAllTaskCounts() {
-            viewModelScope.launch {
-                try {
-                    _isLoading.value = true
-                    contentRepository.normalizeAllTaskCounts()
-                } catch (e: Exception) {
-                    _errorMessage.value = "Ошибка при нормализации количества заданий: ${e.message}"
-                    Timber.e(e, "Ошибка при нормализации количества заданий")
-                } finally {
-                    _isLoading.value = false
-                }
-            }
-        }
-        
-        /**
-         * Нормализует количество заданий для указанной категории.
-         * @param categoryId ID категории заданий EGE (от 1 до 30)
-         */
-        fun normalizeTaskCount(categoryId: Int) {
-            viewModelScope.launch {
-                try {
-                    val categoryIdString: String = categoryId.toString()
-                    contentRepository.normalizeTaskCount(categoryIdString)
-                } catch (e: Exception) {
-                    Timber.e(e, "Ошибка при нормализации количества заданий для категории $categoryId")
                 }
             }
         }
@@ -982,6 +932,109 @@
                 } catch (e: Exception) {
                     Timber.e(e, "Ошибка при обновлении прогресса для задания ${task.taskId} в группе $taskGroupId")
                 }
+            }
+        }
+
+        /**
+         * Приватная функция-маппер
+         */
+        private fun ContentEntity.toContentItem(): ContentItem {
+            return ContentItem(
+                this.contentId,
+                this.title,
+                this.description,
+                this.type,
+                this.parentId,
+                this.isDownloaded,
+                false 
+            )
+        }
+
+        fun forceRefreshTheoryTopics() {
+            viewModelScope.launch {
+                _theoryItemsState.value = Resource.Loading()
+                try {
+                    Timber.d("Force refreshing theory topics")
+                    contentRepository.refreshTheoryTopics()
+                    Timber.d("Force refresh for theory topics initiated successfully")
+                } catch (e: Exception) {
+                    Timber.e(e, "Error force refreshing theory topics: ${e.message}")
+                    _errorMessage.value = "Ошибка принудительного обновления тем теории: ${e.message}"
+                    val currentData = theoryTopicsLiveData.value?.map { it.toContentItem() }
+                    _theoryItemsState.value = Resource.Error("Ошибка принудительного обновления тем теории: ${e.message}", currentData)
+                }
+            }
+        }
+
+        fun forceRefreshTaskTopics() {
+            viewModelScope.launch {
+                _taskItemsState.value = Resource.Loading()
+                try {
+                    Timber.d("Force refreshing task topics")
+                    contentRepository.refreshTasksTopics()
+                    Timber.d("Force refresh for task topics initiated successfully")
+                } catch (e: Exception) {
+                    Timber.e(e, "Error force refreshing task topics: ${e.message}")
+                    _errorMessage.value = "Ошибка принудительного обновления групп заданий: ${e.message}"
+                    val currentData = tasksTopicsLiveData.value?.map { it.toContentItem() }
+                    _taskItemsState.value = Resource.Error("Ошибка принудительного обновления групп заданий: ${e.message}", currentData)
+                }
+            }
+        }
+
+        fun selectAllTasks(isSelected: Boolean) {
+            val currentItems = _taskItemsState.value?.data ?: return
+            val updatedItems = currentItems.map { it.copy(isSelected = isSelected) }
+            _taskItemsState.value = Resource.Success(updatedItems)
+            _isAnyTaskSelected.value = updatedItems.any { it.isSelected }
+        }
+
+        fun selectTask(item: ContentItem, isSelected: Boolean) {
+            val currentItems = _taskItemsState.value?.data ?: return
+            val updatedItems = currentItems.map {
+                if (it.contentId == item.contentId) {
+                    it.copy(isSelected = isSelected)
+                } else {
+                    it
+                }
+            }
+            _taskItemsState.value = Resource.Success(updatedItems)
+            _isAnyTaskSelected.value = updatedItems.any { it.isSelected }
+        }
+
+        fun downloadSelectedTasks() {
+            viewModelScope.launch {
+                val selectedItems = _taskItemsState.value?.data?.filter { it.isSelected && !it.isDownloaded }
+
+                if (selectedItems.isNullOrEmpty()) {
+                    _batchDownloadTasksResult.value = Resource.Success("Нет новых заданий для скачивания.")
+                    return@launch
+                }
+
+                _batchDownloadTasksResult.value = Resource.Loading()
+                var successCount = 0
+                var errorCount = 0
+
+                for (item in selectedItems) {
+                    val egeNumber = item.contentId.removePrefix("task_group_")
+                    contentRepository.downloadTaskGroup(egeNumber)
+                        .firstOrNull { it !is Result.Loading }
+                        .let { result ->
+                            if (result is Result.Success) {
+                                successCount++
+                            } else {
+                                errorCount++
+                            }
+                        }
+                }
+
+                val message = "Успешно скачано групп: $successCount. Ошибок: $errorCount."
+                if (errorCount > 0) {
+                    _batchDownloadTasksResult.value = Resource.Error(message)
+                } else {
+                    _batchDownloadTasksResult.value = Resource.Success(message)
+                }
+                selectAllTasks(false)
             }
         }
     }

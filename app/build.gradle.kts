@@ -55,23 +55,10 @@ android {
 
 val roomVersion = "2.6.1"
 val hiltVersion = "2.48.1"
-val securityCryptoVersion = "1.1.0-alpha03"
 val moshiVersion = "1.14.0"
 val kspVersion = "1.9.20-1.0.14"
 val kotlinVersion = "1.9.20"
 val workVersion = "2.8.1"
-
-configurations.all {
-    resolutionStrategy {
-        force("com.squareup:javapoet:1.13.0")
-        force("org.jetbrains.kotlinx:kotlinx-metadata-jvm:0.3.0")
-        force("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
-        force("org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion")
-        force("org.jetbrains.kotlin:kotlin-stdlib-common:$kotlinVersion")
-        force("org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion")
-    }
-}
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
@@ -118,19 +105,16 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:20.7.0")
     implementation("com.google.android.gms:play-services-base:18.3.0")
     
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    
-    implementation("com.google.code.gson:gson:2.10.1")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-compiler:2.51.1")
 
     implementation("com.squareup.moshi:moshi:$moshiVersion")
     implementation("com.squareup.moshi:moshi-kotlin:$moshiVersion")
-    implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
     ksp("com.squareup.moshi:moshi-kotlin-codegen:$moshiVersion")
     
     implementation("com.google.firebase:firebase-auth-ktx")
@@ -141,7 +125,7 @@ dependencies {
 
     implementation("com.jakewharton.timber:timber:5.0.1")
 
-    implementation("androidx.core:core-ktx:1.9.0")
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.webkit:webkit:1.8.0")
     
 

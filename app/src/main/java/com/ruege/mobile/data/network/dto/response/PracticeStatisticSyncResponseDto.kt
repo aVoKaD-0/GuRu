@@ -1,17 +1,19 @@
 package com.ruege.mobile.data.network.dto.response
 
-import com.google.gson.annotations.SerializedName
+import com.squareup.moshi.Json
+import com.squareup.moshi.JsonClass
 
 /**
  * DTO для PracticeStatisticsEntity при получении данных с сервера.
  */
+@JsonClass(generateAdapter = true)
 data class PracticeStatisticSyncResponseDto(
-    @SerializedName("ege_number")
+    @field:Json(name = "ege_number")
     val egeNumber: String,
-    @SerializedName("total_attempts")
+    @field:Json(name = "total_attempts")
     val totalAttempts: Int,
-    @SerializedName("correct_attempts")
+    @field:Json(name = "correct_attempts")
     val correctAttempts: Int,
-    @SerializedName("last_attempt_date")
+    @field:Json(name = "last_attempt_date")
     val lastAttemptDate: Long
 ) 

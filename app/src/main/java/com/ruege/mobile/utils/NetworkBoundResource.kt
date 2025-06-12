@@ -1,4 +1,4 @@
-package com.ruege.mobile.utils
+package com.ruege.mobile.utilss
 
 import android.util.Log
 import kotlinx.coroutines.flow.*
@@ -21,22 +21,19 @@ inline fun <ResultType, RequestType> networkBoundResource(
     crossinline query: () -> Flow<ResultType>,
     crossinline fetch: suspend () -> Response<RequestType>,
     crossinline saveFetchResult: suspend (RequestType) -> Unit,
-    crossinline shouldFetch: (ResultType?) -> Boolean = { true }, // По умолчанию всегда пытаемся обновить
+    crossinline shouldFetch: (ResultType?) -> Boolean = { true },
     crossinline onFetchFailed: (Throwable) -> Unit = { throwable ->
         Log.e("NBR_Error", "Default onFetchFailed: ${throwable.message}", throwable)
         throwable.printStackTrace()
     },
     resourceName: String = "UnknownResource"
-) = channelFlow { // Используем channelFlow для более гибкого управления эмиссией
+) = channelFlow { 
     Log.d("NBR_$resourceName", "Starting for $resourceName")
 
-    // Сначала отправляем данные из кэша с состоянием Loading
-    val data = query().firstOrNull() // Получаем текущее значение из кэша
+    val data = query().firstOrNull()
     Log.d("NBR_$resourceName", "Initial data from cache: ${if (data != null) "present" else "null"}")
     send(Resource.Loading(data))
 
-    // Подписываемся на Flow из базы данных.
-    // Любые изменения в БД будут немедленно отправлены в UI.
     val flow = query().map {
         Log.d("NBR_$resourceName", "Data from DB Flow: ${it?.toString()?.take(100)}")
         Resource.Success(it)
@@ -52,9 +49,8 @@ inline fun <ResultType, RequestType> networkBoundResource(
             if (response.isSuccessful) {
                 response.body()?.let { requestData ->
                     Log.d("NBR_$resourceName", "Response body is NOT null. Calling saveFetchResult...")
-                    saveFetchResult(requestData) // Сохраняем в БД
+                    saveFetchResult(requestData)
                     Log.d("NBR_$resourceName", "saveFetchResult completed.")
-                    // Данные будут обновлены через 'flow.collect' ниже
                 } ?: run {
                     Log.e("NBR_$resourceName", "Response body is NULL!")
                     val error = Exception("Response body is null for $resourceName")
@@ -62,7 +58,6 @@ inline fun <ResultType, RequestType> networkBoundResource(
                     send(Resource.Error(error.message ?: "Response body is null", data))
                 }
             } else {
-                // Обработка HTTP-ошибки (не 2xx)
                 val errorMsgBody = response.errorBody()?.string() ?: "Unknown error from network (empty errorBody)"
                 Log.e("NBR_$resourceName", "Network request failed. Code: ${response.code()}, Message: $errorMsgBody")
                 val error = Exception("Network request failed for $resourceName with code ${response.code()}: $errorMsgBody")
@@ -70,7 +65,6 @@ inline fun <ResultType, RequestType> networkBoundResource(
                 send(Resource.Error(error.message ?: "Network error", data))
             }
         } catch (throwable: Throwable) {
-            // Обработка других ошибок (например, нет сети)
             Log.e("NBR_$resourceName", "Exception during fetch() or saveFetchResult(): ${throwable.message}", throwable)
             onFetchFailed(throwable)
             send(Resource.Error(throwable.message ?: "Network error during fetch/save for $resourceName", data))
@@ -78,9 +72,6 @@ inline fun <ResultType, RequestType> networkBoundResource(
     } else {
         Log.d("NBR_$resourceName", "shouldFetch is FALSE. Skipping network request.")
     }
-    // Продолжаем эмитить данные из БД
-    // Если shouldFetch был false, или после попытки загрузки (успешной или нет),
-    // мы все равно хотим продолжать слушать изменения из БД.
     Log.d("NBR_$resourceName", "Collecting from DB Flow...")
     flow.collect { send(it) }
     Log.d("NBR_$resourceName", "DB Flow collection finished (or flow completed).")

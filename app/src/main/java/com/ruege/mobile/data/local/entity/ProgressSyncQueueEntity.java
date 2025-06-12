@@ -9,20 +9,27 @@ import androidx.room.Ignore;
 import com.ruege.mobile.data.local.converter.SyncStatusConverter;
 
 /**
- * Сущность очереди синхронизации прогресса пользователя.
+ * Сущность очереди синхронизации прогресса и статистики.
  * Используется для хранения изменений, которые необходимо синхронизировать с сервером.
  */
-@Entity(tableName = "progress_sync_queue")
+@Entity(tableName = "progress_and_static_sync_queue")
 @TypeConverters(SyncStatusConverter.class)
 public class ProgressSyncQueueEntity {
+
+    public static final String ITEM_TYPE_PROGRESS = "progress";
+    public static final String ITEM_TYPE_STATISTICS = "statistics";
 
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
     private long id;
 
     @NonNull
-    @ColumnInfo(name = "content_id")
-    private String contentId;
+    @ColumnInfo(name = "item_id")
+    private String itemId;
+
+    @NonNull
+    @ColumnInfo(name = "item_type")
+    private String itemType;
 
     @ColumnInfo(name = "percentage")
     private int percentage;
@@ -61,9 +68,10 @@ public class ProgressSyncQueueEntity {
      * Основной конструктор
      */
     @Ignore
-    public ProgressSyncQueueEntity(@NonNull String contentId, int percentage, boolean completed, 
+    public ProgressSyncQueueEntity(@NonNull String itemId, @NonNull String itemType, int percentage, boolean completed,
                                   long timestamp, long userId, SyncStatus syncStatus) {
-        this.contentId = contentId;
+        this.itemId = itemId;
+        this.itemType = itemType;
         this.percentage = percentage;
         this.completed = completed;
         this.timestamp = timestamp;
@@ -79,9 +87,10 @@ public class ProgressSyncQueueEntity {
      * Расширенный конструктор с поддержкой списка решенных заданий
      */
     @Ignore
-    public ProgressSyncQueueEntity(@NonNull String contentId, int percentage, boolean completed, 
+    public ProgressSyncQueueEntity(@NonNull String itemId, @NonNull String itemType, int percentage, boolean completed,
                                   long timestamp, long userId, SyncStatus syncStatus, String solvedTaskIds) {
-        this.contentId = contentId;
+        this.itemId = itemId;
+        this.itemType = itemType;
         this.percentage = percentage;
         this.completed = completed;
         this.timestamp = timestamp;
@@ -97,85 +106,94 @@ public class ProgressSyncQueueEntity {
         return id;
     }
 
+    public void setId(long id) {
+        this.id = id;
+    }
+
     @NonNull
-    public String getContentId() {
-        return contentId;
+    public String getItemId() {
+        return itemId;
+    }
+
+    public void setItemId(@NonNull String itemId) {
+        this.itemId = itemId;
+    }
+
+    @NonNull
+    public String getItemType() {
+        return itemType;
+    }
+
+    public void setItemType(@NonNull String itemType) {
+        this.itemType = itemType;
     }
 
     public int getPercentage() {
         return percentage;
     }
 
-    public boolean isCompleted() {
-        return completed;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public long getUserId() {
-        return userId;
-    }
-
-    public SyncStatus getSyncStatus() {
-        return syncStatus;
-    }
-
-    public int getRetryCount() {
-        return retryCount;
-    }
-
-    public long getLastSyncAttempt() {
-        return lastSyncAttempt;
-    }
-
-    public String getErrorMessage() {
-        return errorMessage;
-    }
-
-    public String getSolvedTaskIds() {
-        return solvedTaskIds;
-    }
-
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    public void setContentId(@NonNull String contentId) {
-        this.contentId = contentId;
-    }
-
     public void setPercentage(int percentage) {
         this.percentage = percentage;
+    }
+
+    public boolean isCompleted() {
+        return completed;
     }
 
     public void setCompleted(boolean completed) {
         this.completed = completed;
     }
 
+    public long getTimestamp() {
+        return timestamp;
+    }
+
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public long getUserId() {
+        return userId;
     }
 
     public void setUserId(long userId) {
         this.userId = userId;
     }
 
+    public SyncStatus getSyncStatus() {
+        return syncStatus;
+    }
+
     public void setSyncStatus(SyncStatus syncStatus) {
         this.syncStatus = syncStatus;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
     }
 
     public void setRetryCount(int retryCount) {
         this.retryCount = retryCount;
     }
 
+    public long getLastSyncAttempt() {
+        return lastSyncAttempt;
+    }
+
     public void setLastSyncAttempt(long lastSyncAttempt) {
         this.lastSyncAttempt = lastSyncAttempt;
     }
 
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public String getSolvedTaskIds() {
+        return solvedTaskIds;
     }
 
     public void setSolvedTaskIds(String solvedTaskIds) {

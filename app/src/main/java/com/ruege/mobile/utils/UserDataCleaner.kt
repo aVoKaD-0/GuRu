@@ -1,4 +1,4 @@
-package com.ruege.mobile.utils
+package com.ruege.mobile.utilss
 
 import android.content.Context
 import android.util.Log
@@ -31,36 +31,24 @@ class UserDataCleaner @Inject constructor(
         try {
             Log.d(TAG, "Начинаем очистку данных пользователя. Полная очистка: $clearAllData")
             
-            // Очищаем токены (всегда)
             tokenManager.clearTokens()
             Log.d(TAG, "Токены очищены")
             
-            // Сбрасываем настройки пользователя
             appPreferences.clearUserPreferences()
             Log.d(TAG, "Настройки пользователя сброшены")
             
             if (clearAllData) {
-                // Полная очистка - сбрасываем все данные в базе
-                // Это радикальный подход, очищающий вообще все данные
-                // Используйте осторожно, особенно если некоторые данные должны сохраняться между сессиями
                 appDatabase.clearAllTables()
                 Log.d(TAG, "Все таблицы базы данных очищены")
             } else {
-                // Выборочная очистка - удаляем только данные пользователя
-                // Но сохраняем кэшированный контент и прогресс для возможности работы оффлайн
-                
-                // Очищаем таблицу пользователей
                 appDatabase.userDao().deleteAllUsers()
                 Log.d(TAG, "Таблица пользователей очищена")
                 
-                // Очищаем связанные с синхронизацией таблицы
                 appDatabase.syncQueueDao().clearAll()
                 Log.d(TAG, "Очередь синхронизации очищена")
             }
             
-            // Очищаем кэш Glide
             try {
-                // clearMemory должен выполняться на главном потоке
                 withContext(Dispatchers.Main) {
                     try {
                         com.bumptech.glide.Glide.get(context).clearMemory()
@@ -70,8 +58,6 @@ class UserDataCleaner @Inject constructor(
                     }
                 }
                 
-                // Запускаем очистку дискового кэша в отдельном потоке
-                // (это уже правильно, так как clearDiskCache должен выполняться НЕ на главном потоке)
                 Thread {
                     try {
                         com.bumptech.glide.Glide.get(context).clearDiskCache()

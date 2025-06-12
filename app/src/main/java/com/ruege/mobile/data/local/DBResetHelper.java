@@ -44,10 +44,8 @@ public class DBResetHelper {
         try {
             Log.w(TAG, "Сброс базы данных и установка новой версии: " + newVersion);
             
-            // Очищаем и пересоздаем базу данных
             AppDatabase.clearAndRebuildDatabase(context);
             
-            // Сохраняем новую версию
             prefs.edit().putInt(LAST_VERSION_KEY, newVersion).apply();
             
             return true;
@@ -85,7 +83,6 @@ public class DBResetHelper {
         
         Log.d(TAG, "Current DB version: " + currentVersion + ", Saved version: " + savedVersion);
         
-        // Если сохраненная версия ниже текущей, сбрасываем базу
         if (savedVersion < currentVersion) {
             return helper.resetDatabase(currentVersion);
         }
@@ -105,13 +102,10 @@ public class DBResetHelper {
         if (!isFixed) {
             Log.d(TAG, "Проверка и исправление таблицы прогресса...");
             try {
-                // Выполняем асинхронную инициализацию прогресса в отдельном потоке
                 new Thread(() -> {
                     try {
-                        // Получаем доступ к базе данных
                         AppDatabase db = AppDatabase.getInstance(context);
                         
-                        // Удаляем записи прогресса с NULL в contentId (если такие есть)
                         int deleted = db.getOpenHelper().getWritableDatabase()
                                 .delete("progress", "content_id IS NULL", null);
                         
@@ -119,7 +113,6 @@ public class DBResetHelper {
                             Log.d(TAG, "Удалено записей с NULL contentId: " + deleted);
                         }
                         
-                        // Проверяем наличие записей task_group_
                         android.database.Cursor cursor = db.getOpenHelper().getReadableDatabase()
                                 .query("SELECT COUNT(*) FROM progress WHERE content_id LIKE 'task_group_%'");
                         
@@ -128,11 +121,7 @@ public class DBResetHelper {
                         cursor.close();
                         
                         Log.d(TAG, "Найдено " + taskGroupCount + " записей task_group_");
-                        
-                        // Если нет записей типа task_group, инициализируем их через ProgressRepository
-                        // (это произойдет автоматически при вызове initializeUserProgress в MainActivity)
-                        
-                        // Отмечаем, что таблица проверена и исправлена
+
                         prefs.edit().putBoolean(PROGRESS_FIXED_KEY, true).apply();
                         
                         Log.d(TAG, "Проверка и исправление таблицы прогресса завершены");

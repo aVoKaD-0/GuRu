@@ -16,7 +16,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ruege.mobile.R
-import com.ruege.mobile.viewmodel.ShpargalkaViewModel
+import com.ruege.mobile.ui.viewmodel.ShpargalkaViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import com.ruege.mobile.MainActivity
@@ -34,7 +34,7 @@ class ShpargalkaBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     private var currentPdfId: Int? = null
     private var currentTitle: String? = null
-    private var currentDescription: String? = null // Для передачи в MainActivity для скачивания
+    private var currentDescription: String? = null 
 
     companion object {
         const val TAG_SHPARGALKA_BS = "ShpargalkaBottomSheetDialogFragment_TAG"
@@ -96,15 +96,12 @@ class ShpargalkaBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
         titleTextView.text = currentTitle ?: "Шпаргалка"
         
-        // Убираем или устанавливаем в true, чтобы вернуть нормальную прокрутку PDF
         pdfView.isNestedScrollingEnabled = true
 
-        // Для проблемы №2: принудительно показываем ProgressBar и скрываем PDFView/ошибку перед начальной загрузкой
         Log.d(TAG_SHPARGALKA_BS, "onViewCreated: Setting initial UI state for PDF loading.")
         progressBar.visibility = View.VISIBLE
         pdfView.visibility = View.GONE
         errorMessageTextView.visibility = View.GONE
-        // Кнопку скачивания тоже можно скрыть изначально, и показывать только когда PDF загружен
         downloadButton.visibility = View.GONE 
 
         setupObservers()
@@ -169,16 +166,14 @@ class ShpargalkaBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     .defaultPage(0)
                     .onError { t -> Log.e(TAG_SHPARGALKA_BS, "Error loading PDF into PDFView", t) }
                     .load()
-                downloadButton.visibility = View.VISIBLE // Показать кнопку скачивания, если PDF отображен
+                downloadButton.visibility = View.VISIBLE 
             } else if (shpargalkaViewModel.getPdfLoadingStatus().value == false) {
-                 // Если файл null и не идет загрузка, и нет ошибки, значит, что-то не так
-                 // Возможно, стоит показать сообщение об ошибке, если _pdfLoadError также null
                 if (shpargalkaViewModel.getPdfLoadError().value == null) {
                     Log.d(TAG_SHPARGALKA_BS, "currentPdfFile is null, loading is false, and no error. Displaying generic error.")
                     errorMessageTextView.text = "Не удалось загрузить PDF файл."
                     errorMessageTextView.visibility = View.VISIBLE
                     pdfView.visibility = View.GONE
-                    downloadButton.visibility = View.VISIBLE // Дать возможность скачать
+                    downloadButton.visibility = View.VISIBLE
                 }
             }
         }
@@ -189,7 +184,7 @@ class ShpargalkaBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 errorMessageTextView.visibility = View.VISIBLE
                 errorMessageTextView.text = error
                 pdfView.visibility = View.GONE
-                downloadButton.visibility = View.VISIBLE // Можно оставить кнопку видимой, чтобы попытаться скачать снова
+                downloadButton.visibility = View.VISIBLE
             } else {
                 errorMessageTextView.visibility = View.GONE
             }
@@ -204,9 +199,8 @@ class ShpargalkaBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 val behavior = BottomSheetBehavior.from(it)
                 behavior.state = BottomSheetBehavior.STATE_EXPANDED
                 behavior.skipCollapsed = true
-                // Раскомментируем и установим высоту принудительно
                 val layoutParams = it.layoutParams
-                layoutParams.height = (resources.displayMetrics.heightPixels * 0.95).toInt() // 95% высоты экрана
+                layoutParams.height = (resources.displayMetrics.heightPixels * 1).toInt()
                 it.layoutParams = layoutParams
             }
         }

@@ -1,4 +1,4 @@
-package com.ruege.mobile.utils
+package com.ruege.mobile.utilss
 
 /**
  * Общий класс для представления состояния загрузки данных.

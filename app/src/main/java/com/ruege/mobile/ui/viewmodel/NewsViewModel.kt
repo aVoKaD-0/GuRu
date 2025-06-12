@@ -1,15 +1,18 @@
 package com.ruege.mobile.ui.viewmodel
 
-import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
+import androidx.lifecycle.map
 import androidx.lifecycle.viewModelScope
 import com.ruege.mobile.data.local.entity.NewsEntity
 import com.ruege.mobile.data.repository.NewsRepository
+import com.ruege.mobile.model.NewsItem
+import com.ruege.mobile.utilss.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -30,11 +33,22 @@ class NewsViewModel @Inject constructor(
     val error: LiveData<String?> = _error
 
     /**
-     * LiveData с данными новостей.
+     * LiveData с данными новостей в формате для UI.
      */
-    val newsLiveData: LiveData<List<NewsEntity>> = newsRepository
+    val newsItemsLiveData: LiveData<List<NewsItem>> = newsRepository
         .getAllNewsStream()
         .asLiveData(viewModelScope.coroutineContext)
+        .map { newsEntityList ->
+            newsEntityList.map { entity ->
+                NewsItem(
+                    entity.title,
+                    entity.publicationDate.toString(),
+                    entity.description,
+                    entity.imageUrl,
+                    null
+                )
+            }
+        }
     
     /**
      * Загружает последние новости через специальный API эндпоинт.
@@ -43,14 +57,12 @@ class NewsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null 
-            try {
-                newsRepository.refreshLatestNews(limit)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing latest news", e)
-                _error.value = "Не удалось загрузить новости: ${e.message}"
-            } finally {
-                _isLoading.value = false
+            val result = newsRepository.refreshLatestNews(limit)
+            if (result is Resource.Error) {
+                Timber.e(result.message ?: "Unknown error refreshing latest news")
+                _error.value = result.message ?: "Не удалось загрузить новости"
             }
+            _isLoading.value = false
         }
     }
 
@@ -60,12 +72,10 @@ class NewsViewModel @Inject constructor(
      */
     fun clearAllNews() {
         viewModelScope.launch { 
-            
-            
             try {
                 newsRepository.clearAllNews() 
             } catch (e: Exception) {
-                Log.e(TAG, "Error clearing news", e)
+                Timber.e(e, "Error clearing news")
             }
         }
     }

@@ -26,7 +26,6 @@ class TaskDetailFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Получаем ID задания из аргументов
         taskId = arguments?.getInt("taskId", 0) ?: 0
         Timber.d("TaskDetailFragment создан с ID задания: $taskId")
     }
@@ -42,21 +41,17 @@ class TaskDetailFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Находим TextView для отображения сообщения
         val messageView = view.findViewById<TextView>(R.id.tvTaskDetailMessage)
         
         if (taskId > 0) {
-            // Отображаем сообщение с ID задания
             messageView.text = "Загрузка задания с ID: $taskId...\nЭта функциональность находится в разработке."
             
-            // Открываем TaskFragment с указанным ID
             val taskFragment = TaskFragment.newInstance(taskId.toString())
             parentFragmentManager.beginTransaction()
                 .replace(R.id.fragment_container, taskFragment)
                 .addToBackStack(null)
                 .commit()
         } else {
-            // Показываем сообщение об ошибке
             messageView.text = "Ошибка: ID задания не указан или некорректен."
             Toast.makeText(requireContext(), "Ошибка: не удалось загрузить задание", Toast.LENGTH_SHORT).show()
         }

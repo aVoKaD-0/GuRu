@@ -16,19 +16,16 @@ class AppPreferences @Inject constructor(
 ) {
     private val TAG = "AppPreferences"
     
-    // Основные настройки приложения
     private val appPreferences: SharedPreferences = context.getSharedPreferences(
         PREFS_APP_SETTINGS,
         Context.MODE_PRIVATE
     )
     
-    // Настройки пользователя
     private val userPreferences: SharedPreferences = context.getSharedPreferences(
         PREFS_USER_SETTINGS,
         Context.MODE_PRIVATE
     )
     
-    // Настройки темы
     fun isDarkTheme(): Boolean {
         return appPreferences.getBoolean(KEY_DARK_THEME, false)
     }
@@ -37,7 +34,6 @@ class AppPreferences @Inject constructor(
         appPreferences.edit().putBoolean(KEY_DARK_THEME, isDarkTheme).apply()
     }
     
-    // Настройки синхронизации
     fun setSyncEnabled(enabled: Boolean) {
         userPreferences.edit().putBoolean(KEY_SYNC_ENABLED, enabled).apply()
     }
@@ -45,8 +41,7 @@ class AppPreferences @Inject constructor(
     fun isSyncEnabled(): Boolean {
         return userPreferences.getBoolean(KEY_SYNC_ENABLED, true)
     }
-    
-    // Последнее время синхронизации
+
     fun setLastSyncTime(timestamp: Long) {
         userPreferences.edit().putLong(KEY_LAST_SYNC_TIME, timestamp).apply()
     }
@@ -55,7 +50,6 @@ class AppPreferences @Inject constructor(
         return userPreferences.getLong(KEY_LAST_SYNC_TIME, 0)
     }
     
-    // Настройки уведомлений
     fun setNotificationsEnabled(enabled: Boolean) {
         userPreferences.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, enabled).apply()
     }
@@ -64,7 +58,6 @@ class AppPreferences @Inject constructor(
         return userPreferences.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
     }
     
-    // Настройка автозагрузки контента
     fun setAutoLoadContent(enabled: Boolean) {
         userPreferences.edit().putBoolean(KEY_AUTO_LOAD_CONTENT, enabled).apply()
     }
@@ -73,7 +66,6 @@ class AppPreferences @Inject constructor(
         return userPreferences.getBoolean(KEY_AUTO_LOAD_CONTENT, true)
     }
     
-    // Отслеживание первого запуска приложения
     fun isFirstLaunch(): Boolean {
         return appPreferences.getBoolean(KEY_FIRST_LAUNCH, true)
     }
@@ -82,13 +74,11 @@ class AppPreferences @Inject constructor(
         appPreferences.edit().putBoolean(KEY_FIRST_LAUNCH, isFirstLaunch).apply()
     }
     
-    // Очистка пользовательских настроек при выходе из аккаунта
     fun clearUserPreferences() {
         try {
             userPreferences.edit().clear().apply()
             Log.d(TAG, "Пользовательские настройки очищены")
             
-            // Восстанавливаем настройки по умолчанию
             setSyncEnabled(true)
             setNotificationsEnabled(true)
             setAutoLoadContent(true)

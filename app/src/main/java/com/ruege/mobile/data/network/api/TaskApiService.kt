@@ -6,6 +6,9 @@ import com.ruege.mobile.data.network.dto.response.TaskDetailDto
 import com.ruege.mobile.data.network.dto.response.TaskDto
 import com.ruege.mobile.data.network.dto.response.TaskTextResponseDto
 import com.ruege.mobile.model.AnswerCheckResult
+import com.ruege.mobile.data.network.dto.response.TextDataDto
+import com.ruege.mobile.data.network.dto.response.SolutionDto
+import com.ruege.mobile.data.network.dto.response.TasksWithTextsResponseDto
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -40,8 +43,9 @@ interface TaskApiService {
     suspend fun getTasksByEgeNumberPaginated(
         @Path("ege_number") egeNumber: String,
         @Query("limit") limit: Int = 20,
-        @Query("page_number") pageNumber: Int
-    ): Response<List<TaskDto>>
+        @Query("page_number") pageNumber: Int = 1,
+        @Query("include_text") includeText: Boolean = false
+    ): Response<TasksWithTextsResponseDto>
     
     /**
      * Получает группы заданий ЕГЭ.

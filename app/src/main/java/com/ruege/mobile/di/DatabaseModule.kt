@@ -17,13 +17,11 @@ import com.ruege.mobile.data.local.dao.TaskOptionDao
 import com.ruege.mobile.data.local.dao.VariantDao
 import com.ruege.mobile.data.local.dao.VariantSharedTextDao
 import com.ruege.mobile.data.local.dao.VariantTaskDao
+import com.ruege.mobile.data.local.dao.DownloadedTheoryDao
+import com.ruege.mobile.data.local.dao.SyncQueueDao
 import com.ruege.mobile.data.local.dao.UserVariantTaskAnswerDao
 import com.ruege.mobile.data.local.dao.VariantTaskOptionDao
 import com.ruege.mobile.data.network.api.ProgressApiService
-import com.ruege.mobile.data.repository.PracticeRepository
-import com.ruege.mobile.data.repository.ProgressRepository
-import com.ruege.mobile.data.repository.ProgressSyncRepository
-import com.ruege.mobile.data.repository.UserRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -94,46 +92,6 @@ object DatabaseModule {
     }
     
     @Provides
-    @Singleton
-    fun providePracticeRepository(
-        practiceAttemptDao: PracticeAttemptDao,
-        practiceStatisticsDao: PracticeStatisticsDao,
-        taskDao: TaskDao
-    ): PracticeRepository {
-        return PracticeRepository(practiceAttemptDao, practiceStatisticsDao, taskDao)
-    }
-    
-    @Provides
-    @Singleton
-    fun provideProgressSyncRepository(
-        @ApplicationContext context: Context,
-        progressDao: ProgressDao,
-        progressSyncQueueDao: ProgressSyncQueueDao,
-        progressApiService: ProgressApiService
-    ): ProgressSyncRepository {
-        return ProgressSyncRepository(context, progressDao, progressSyncQueueDao, progressApiService)
-    }
-    
-    @Provides
-    @Singleton
-    fun provideProgressRepository(
-        progressDao: ProgressDao,
-        progressApiService: ProgressApiService,
-        progressSyncRepository: ProgressSyncRepository,
-        contentDao: ContentDao
-    ): ProgressRepository {
-        return ProgressRepository(progressDao, progressApiService, progressSyncRepository, contentDao)
-    }
-    
-    @Provides
-    @Singleton
-    fun provideUserRepository(
-        userDao: UserDao
-    ): UserRepository {
-        return UserRepository(userDao)
-    }
-
-    @Provides
     fun provideTaskOptionDao(appDatabase: AppDatabase): TaskOptionDao {
         return appDatabase.taskOptionDao()
     }
@@ -166,5 +124,15 @@ object DatabaseModule {
     @Singleton
     fun provideVariantTaskOptionDao(appDatabase: AppDatabase): VariantTaskOptionDao {
         return appDatabase.variantTaskOptionDao()
+    }
+
+    @Provides
+    fun provideDownloadedTheoryDao(appDatabase: AppDatabase): DownloadedTheoryDao {
+        return appDatabase.downloadedTheoryDao()
+    }
+
+    @Provides
+    fun provideSyncQueueDao(appDatabase: AppDatabase): SyncQueueDao {
+        return appDatabase.syncQueueDao()
     }
 } 

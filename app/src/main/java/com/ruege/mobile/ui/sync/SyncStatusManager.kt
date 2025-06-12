@@ -24,8 +24,6 @@ class SyncStatusManager(
     private val rootView: View,
     private val progressViewModel: ProgressViewModel
 ) : DefaultLifecycleObserver {
-    
-    // UI компоненты
     private val syncStatusIcon: ImageView = rootView.findViewById(R.id.sync_status_icon)
     private val syncStatusText: TextView = rootView.findViewById(R.id.sync_status_text)
     private val pendingCountText: TextView = rootView.findViewById(R.id.pending_count)
@@ -34,13 +32,11 @@ class SyncStatusManager(
     private val syncNowButton: Button = rootView.findViewById(R.id.btn_sync_now)
     private val clearFailedButton: Button = rootView.findViewById(R.id.btn_clear_failed)
     
-    // Счетчики
     private var pendingCount = 0
     private var failedCount = 0
     private var totalCount = 0
     
     init {
-        // Настраиваем обработчики кнопок
         syncNowButton.setOnClickListener {
             progressViewModel.syncNow()
             startSyncAnimation()
@@ -55,12 +51,10 @@ class SyncStatusManager(
      * Инициализирует наблюдателей за данными синхронизации
      */
     fun initialize(lifecycleOwner: LifecycleOwner) {
-        // Наблюдатель за изменениями в очереди синхронизации
-        progressViewModel.syncQueueLiveData.observe(lifecycleOwner) { syncItems ->
-            updateSyncStatus(syncItems)
+        progressViewModel.syncQueueLiveData.observe(lifecycleOwner) { syncItems: List<ProgressSyncQueueEntity>? ->
+            syncItems?.let { updateSyncStatus(it) }
         }
         
-        // Наблюдатель за количеством ожидающих элементов
         progressViewModel.pendingItemsCount.observe(lifecycleOwner) { count ->
             pendingCount = count?.toInt() ?: 0
             pendingCountText.text = pendingCount.toString()
@@ -68,14 +62,12 @@ class SyncStatusManager(
             updateSyncStatusUI()
         }
         
-        // Наблюдатель за количеством элементов с ошибкой
         progressViewModel.failedItemsCount.observe(lifecycleOwner) { count ->
             failedCount = count?.toInt() ?: 0
             failedCountText.text = failedCount.toString()
             updateTotalCount()
             updateSyncStatusUI()
             
-            // Включаем/отключаем кнопку очистки ошибок
             clearFailedButton.isEnabled = failedCount > 0
         }
     }
@@ -118,21 +110,17 @@ class SyncStatusManager(
      * Обновляет статус синхронизации на основе списка элементов очереди
      */
     private fun updateSyncStatus(syncItems: List<ProgressSyncQueueEntity>) {
-        // Общее количество элементов в очереди
         totalCount = syncItems.size
         totalCountText.text = totalCount.toString()
         
-        // Если список пуст, показываем статус "Синхронизировано"
         if (syncItems.isEmpty()) {
             syncStatusIcon.setImageResource(R.drawable.ic_sync_done)
             syncStatusIcon.setColorFilter(ContextCompat.getColor(context, android.R.color.holo_green_light))
             syncStatusText.text = "Синхронизировано"
             syncStatusText.setTextColor(ContextCompat.getColor(context, android.R.color.holo_green_light))
             
-            // Выключаем кнопку очистки ошибок
             clearFailedButton.isEnabled = false
             
-            // Обновляем счетчики
             pendingCount = 0
             failedCount = 0
             pendingCountText.text = "0"
@@ -140,23 +128,18 @@ class SyncStatusManager(
             return
         }
         
-        // Анализируем элементы в очереди
         var hasFailed = false
         var isSyncing = false
         
-        // Подсчитываем элементы по статусам
         pendingCount = syncItems.count { it.syncStatus == SyncStatus.PENDING }
         failedCount = syncItems.count { it.syncStatus == SyncStatus.FAILED }
         
-        // Обновляем UI счетчиков
         pendingCountText.text = pendingCount.toString()
         failedCountText.text = failedCount.toString()
         
-        // Проверяем, есть ли активная синхронизация
         isSyncing = syncItems.any { it.syncStatus == SyncStatus.SYNCING }
         hasFailed = failedCount > 0
         
-        // Обновляем UI статуса
         when {
             isSyncing -> {
                 startSyncAnimation()
@@ -182,8 +165,6 @@ class SyncStatusManager(
                 syncStatusText.setTextColor(ContextCompat.getColor(context, android.R.color.holo_green_light))
             }
         }
-        
-        // Включаем/отключаем кнопку очистки ошибок
         clearFailedButton.isEnabled = hasFailed
     }
     
@@ -214,7 +195,6 @@ class SyncStatusManager(
      * Метод жизненного цикла при паузе активности
      */
     override fun onPause(owner: LifecycleOwner) {
-        // При необходимости можно остановить анимацию
         super.onPause(owner)
     }
     
@@ -222,7 +202,6 @@ class SyncStatusManager(
      * Метод жизненного цикла при уничтожении активности
      */
     override fun onDestroy(owner: LifecycleOwner) {
-        // Освобождаем ресурсы
         super.onDestroy(owner)
     }
 } 

@@ -50,6 +50,34 @@
             app:layout_constraintTop_toBottomOf="@id/tv_variant_name"
             tools:text="27 заданий" />
 
+        <FrameLayout
+            android:id="@+id/download_container"
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <CheckBox
+                android:id="@+id/variant_checkbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:visibility="visible"
+                tools:checked="false"/>
+
+            <ImageView
+                android:id="@+id/variant_downloaded_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_check_circle"
+                android:layout_gravity="center_vertical"
+                app:tint="@color/success_green"
+                android:visibility="gone"
+                tools:visibility="visible"/>
+
+        </FrameLayout>
+
         <TextView
             android:id="@+id/tv_variant_status"
             android:layout_width="wrap_content"

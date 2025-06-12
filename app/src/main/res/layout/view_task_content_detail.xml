@@ -93,17 +93,16 @@
             android:background="?android:attr/listDivider"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="16dp"/>
-
-        <TextView
-            android:id="@+id/task_content"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textColor="?android:attr/textColorPrimary"
-            android:visibility="visible"
-            android:layout_marginBottom="16dp"/>
-
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/task_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:visibility="visible"
+        android:layout_marginBottom="16dp"/>
 
     <LinearLayout
         android:id="@+id/task_result_container"

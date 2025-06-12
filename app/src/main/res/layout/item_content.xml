@@ -49,6 +49,32 @@
                 tools:text="Правила правописания гласных и согласных в корне слова" />
         </LinearLayout>
 
+        <FrameLayout
+            android:id="@+id/content_download_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical">
+
+            <CheckBox
+                android:id="@+id/content_download_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:focusable="true"
+                tools:checked="true"/>
+
+            <ImageView
+                android:id="@+id/content_downloaded_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_check_circle"
+                android:visibility="gone"
+                app:tint="@color/success_green"
+                tools:visibility="visible"/>
+
+        </FrameLayout>
+
         <ImageView
             android:id="@+id/content_arrow"
             android:layout_width="24dp"

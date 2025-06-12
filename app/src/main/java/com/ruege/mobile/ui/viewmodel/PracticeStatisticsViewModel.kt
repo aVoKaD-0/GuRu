@@ -21,20 +21,11 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
-// UI модель для общей статистики
 data class OverallStatisticsUiModel(
     val totalAttempts: Int,
     val correctAttempts: Int,
     val successRate: Int
 )
-
-// UI модель для элемента списка последних попыток (если потребуется)
-// data class PracticeAttemptUiModel(
-//    val attemptId: Long,
-//    val taskTitle: String, // Потребуется способ получить название задачи
-//    val attemptDate: Long,
-//    val isCorrect: Boolean
-// )
 
 @HiltViewModel
 class PracticeStatisticsViewModel @Inject constructor(
@@ -145,28 +136,4 @@ class PracticeStatisticsViewModel @Inject constructor(
                 }
         }
     }
-
-    // Если в репозитории нет getAggregatedStatistics, можно рассчитать здесь:
-    // Flow для общей статистики, если getAggregatedStatistics не существует в репо
-    /*
-    val overallStatistics: StateFlow<OverallStatisticsUiModel?> = practiceStatisticsRepository.getAllStatisticsSorted()
-        .map { list ->
-            if (list.isEmpty()) return@map null
-            val totalAttempts = list.sumOf { it.totalAttempts }
-            val correctAttempts = list.sumOf { it.correctAttempts }
-            OverallStatisticsUiModel(
-                totalAttempts = totalAttempts,
-                correctAttempts = correctAttempts,
-                successRate = if (totalAttempts > 0) (correctAttempts * 100 / totalAttempts) else 0
-            )
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null // или OverallStatisticsUiModel(0,0,0)
-        )
-    */
-
-    // TODO: Добавить LiveData/StateFlow для последних попыток (для вкладки "Последние попытки")
-    // fun getRecentAttemptsForEgeNumber(egeNumber: String): Flow<List<PracticeAttemptUiModel>> { ... }
 }

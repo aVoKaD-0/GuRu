@@ -34,6 +34,20 @@ private const val MAX_ATTEMPTS = 3
 @AndroidEntryPoint
 class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
+    companion object {
+        const val TAG_TASK_BS = "TaskDisplayBottomSheet"
+
+        @JvmStatic
+        fun newInstance(categoryId: String, title: String): TaskDisplayBottomSheetDialogFragment {
+            return TaskDisplayBottomSheetDialogFragment().apply {
+                arguments = Bundle().apply {
+                    putString(ARG_CATEGORY_ID, categoryId)
+                    putString(ARG_TITLE, title)
+                }
+            }
+        }
+    }
+
     private val contentViewModel: ContentViewModel by activityViewModels()
 
     private var categoryId: String? = null
@@ -88,11 +102,6 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         bindViews(view)
         taskBottomSheetTitle?.text = sheetTitle ?: "Задания"
 
-        this.sheetTitle?.let { title ->
-            this.egeNumberForApi = extractEgeNumberFromTitle(title)
-            Log.d(TAG_TASK_DISPLAY_BS, "Извлечен EGE номер: ${this.egeNumberForApi} из заголовка: $title")
-        }
-
         setInitialUiState()
         initObserversAndLoadInitialData()
         setupPaginationScrollListener()
@@ -124,110 +133,75 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         setupGeneralObservers()
 
         tasksObserver = Observer { tasks ->
-            Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: START. Входной список: ${tasks?.size ?: "null"}. Текущий: ${currentTasks.size}. currentActiveTaskIndex: $currentActiveTaskIndex")
+            Log.d(TAG_TASK_BS, "Tasks Observer: START. Received ${tasks?.size ?: "null"} tasks. Current task count: ${currentTasks.size}.")
 
-            val previousActiveTaskIndex = currentActiveTaskIndex
-            val previousScrollX = taskNumbersScroll?.scrollX ?: 0
-            var targetActiveIndexAfterUpdate = currentActiveTaskIndex
-
-            val isPagingUpdate = currentTasks.isNotEmpty() && tasks != null && tasks.size > currentTasks.size
-            val isInitialLoad = currentTasks.isEmpty() && tasks != null && tasks.isNotEmpty()
-            val isEmptyOrError = tasks.isNullOrEmpty()
-
-            if (isInitialLoad) {
-                targetActiveIndexAfterUpdate = 0 // Для первой загрузки всегда 0
-                Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: Режим ПЕРВОЙ ЗАГРУЗКИ. newTargetActiveIndex = 0")
-            } else if (isPagingUpdate) {
-                // newTargetActiveIndex уже равен currentActiveTaskIndex, это правильно для дозагрузки
-                Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: Режим ДОЗАГРУЗКИ. newTargetActiveIndex = $currentActiveTaskIndex (сохраненный current), oldScrollX = $previousScrollX")
-            } else if (isEmptyOrError) {
-                targetActiveIndexAfterUpdate = 0 // Сброс, если данных нет
-                Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: Режим ПУСТО/ОШИБКА. newTargetActiveIndex = 0")
+            val previousTaskId = if (currentTasks.isNotEmpty() && currentActiveTaskIndex < currentTasks.size) {
+                currentTasks[currentActiveTaskIndex].taskId
             } else {
-                // Ситуация, когда список задач изменился, но это не первая загрузка и не дозагрузка (например, фильтрация - у нас ее нет, или полный рефреш)
-                // Если размер списка изменился, но не увеличился, имеет смысл сбросить на 0 или оставить текущий, если он валиден
-                if (tasks != null && targetActiveIndexAfterUpdate >= tasks.size) {
-                    targetActiveIndexAfterUpdate = 0
-                }
-                Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: Режим ОБНОВЛЕНИЯ (не первая, не дозагрузка). newTargetActiveIndex = $targetActiveIndexAfterUpdate")
+                null
             }
+            val previousScrollX = taskNumbersScroll?.scrollX ?: 0
+            val wasPagingUpdate = tasks != null && currentTasks.isNotEmpty() && tasks.size > currentTasks.size
 
             currentTasks.clear()
-            if (tasks != null) {
-                currentTasks.addAll(tasks)
+            if (tasks.isNullOrEmpty()) {
+                val errorMessage = contentViewModel.errorMessage.value ?: "Нет доступных заданий для этой категории."
+                if (contentViewModel.errorMessage.value?.contains(ContentRepository.NO_DATA_AND_NETWORK_ISSUE_FLAG) == true) {
+                    showErrorState("Нет данных или проблема с сетью. Проверьте подключение.")
+                } else {
+                    showEmptyState(errorMessage)
+                }
+                updateNavigationUi()
+                return@Observer
             }
-            Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: currentTasks обновлен, новый размер: ${currentTasks.size}")
+            currentTasks.addAll(tasks)
 
-            // Устанавливаем currentActiveTaskIndex, проверяя границы
-            currentActiveTaskIndex = if (currentTasks.isNotEmpty() && targetActiveIndexAfterUpdate < currentTasks.size) {
-                targetActiveIndexAfterUpdate
+            var newActiveIndex = if (previousTaskId != null) {
+                currentTasks.indexOfFirst { it.taskId == previousTaskId }.takeIf { it != -1 } ?: 0
             } else {
                 0
             }
-            Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: currentActiveTaskIndex установлен в $currentActiveTaskIndex")
+            
+            if (newActiveIndex >= currentTasks.size) {
+                newActiveIndex = 0
+            }
+            currentActiveTaskIndex = newActiveIndex
 
-            // После того, как currentTasks обновлен и currentActiveTaskIndex установлен:
-            // Важно: setupTaskNavigation должен быть вызван ДО showTaskAtIndex, 
-            // так как showTaskAtIndex вызовет updateTaskNumberSelection, который использует taskNumberViewIds
-            if (currentTasks.isNotEmpty()) {
-                taskNumberViewIds = setupTaskNavigation(currentTasks)
-                showTaskAtIndex(currentActiveTaskIndex) // Это обновит контент и вызовет updateTaskNumberSelection
+            taskNumberViewIds = setupTaskNavigation(currentTasks)
+            showTaskAtIndex(currentActiveTaskIndex)
 
-                // Логика восстановления прокрутки
-                taskNumbersScroll?.post {
-                    var finalScrollX = -1
-                    if (isPagingUpdate && currentActiveTaskIndex == previousActiveTaskIndex) {
-                        // Дозагрузка, и активный элемент не изменился. Пытаемся восстановить старую прокрутку.
-                        finalScrollX = previousScrollX
-                        Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer (Paging, same index $currentActiveTaskIndex): Restoring previousScrollX = $finalScrollX")
-                    } else {
-                        // Либо не дозагрузка, либо активный индекс изменился.
-                        // Прокручиваем к текущему активному элементу, чтобы он был слева.
-                        taskNumberViewIds?.getOrNull(currentActiveTaskIndex)?.let { viewId ->
-                            view?.findViewById<View>(viewId)?.let {
-                                finalScrollX = it.left
-                                Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer (Index changed or not paging): Scrolling to left of new active index $currentActiveTaskIndex. Target scrollX = $finalScrollX")
-                            }
+            taskNumbersScroll?.post {
+                if (wasPagingUpdate) {
+                    Log.d(TAG_TASK_BS, "Paging update. Restoring scroll position to $previousScrollX")
+                    taskNumbersScroll?.smoothScrollTo(previousScrollX, 0)
+                } else {
+                    taskNumberViewIds?.getOrNull(currentActiveTaskIndex)?.let { viewId ->
+                        view?.findViewById<View>(viewId)?.let {
+                            val scrollX = it.left - (taskNumbersScroll!!.width - it.width) / 2
+                            taskNumbersScroll?.smoothScrollTo(scrollX, 0)
+                             Log.d(TAG_TASK_BS, "Initial load/refresh. Scrolling to make item $currentActiveTaskIndex visible.")
                         }
                     }
-                    if (finalScrollX != -1) {
-                        taskNumbersScroll?.smoothScrollTo(finalScrollX, 0)
-                    }
-                }
-            } else {
-                Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: Список задач ПУСТ после обновления. Показываем пустое состояние.")
-                taskNumberViewIds = setupTaskNavigation(emptyList()) // Очищаем навигацию
-                val errorMessage = if (egeNumberForApi != null) {
-                    contentViewModel.errorMessage.value ?: "Нет доступных заданий для категории $egeNumberForApi."
-                } else {
-                    contentViewModel.errorMessage.value ?: "Задания не найдены."
-                }
-                // Используем showErrorState или showEmptyState в зависимости от наличия ошибки от ViewModel
-                if (contentViewModel.errorMessage.value != null && ContentRepository.NO_DATA_AND_NETWORK_ISSUE_FLAG != contentViewModel.errorMessage.value) {
-                     showErrorState(errorMessage)
-                } else if (ContentRepository.NO_DATA_AND_NETWORK_ISSUE_FLAG == contentViewModel.errorMessage.value) {
-                    showErrorState("Нет данных или проблема с сетью. Проверьте подключение.")
-                }
-                else {
-                    showEmptyState(errorMessage)
                 }
             }
-            updateNavigationUi() // Обновляем состояние кнопок Вперед/Назад
-            Log.d(TAG_TASK_DISPLAY_BS, "Tasks Observer: END.")
+            updateNavigationUi()
+            Log.d(TAG_TASK_BS, "Tasks Observer: END. Active index: $currentActiveTaskIndex.")
         }
 
         contentViewModel.tasks.observe(viewLifecycleOwner, tasksObserver!!)
 
-        if (egeNumberForApi != null) {
+        val egeNumber = categoryId?.removePrefix("task_group_")
+        if (egeNumber != null) {
+            this.egeNumberForApi = egeNumber
             val existingTasks = contentViewModel.tasks.value
             if (existingTasks == null || existingTasks.isEmpty() || !isViewCreatedOnce) {
-                Log.d(TAG_TASK_DISPLAY_BS, "Список задач пуст, отсутствует или view не создавался. Загружаем для egeNumber: $egeNumberForApi")
+                Log.d(TAG_TASK_BS, "Список задач пуст, отсутствует или view не создавался. Загружаем для egeNumber: $egeNumber")
                 showLoadingState()
-                contentViewModel.loadTasksByCategory(egeNumberForApi!!)
+                contentViewModel.loadTasksByCategory(egeNumber)
             } else {
-                Log.d(TAG_TASK_DISPLAY_BS, "Используем существующие задачи (${existingTasks.size} шт.) для egeNumber: $egeNumberForApi")
+                Log.d(TAG_TASK_BS, "Используем существующие задачи (${existingTasks.size} шт.) для egeNumber: $egeNumber")
                 if (currentTasks.isNotEmpty()) {
-                    Log.d(TAG_TASK_DISPLAY_BS, "Calling setupTaskNavigation for existing tasks in currentTasks.")
+                    Log.d(TAG_TASK_BS, "Calling setupTaskNavigation for existing tasks in currentTasks.")
                     taskNumberViewIds = setupTaskNavigation(currentTasks)
                     showTaskAtIndex(currentActiveTaskIndex)
                 } else if (existingTasks.isNotEmpty()) {
@@ -241,7 +215,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 }
             }
         } else {
-            Log.e(TAG_TASK_DISPLAY_BS, "egeNumberForApi is null at init. Cannot load tasks initially or use existing.")
+            Log.e(TAG_TASK_BS, "egeNumber is null at init (derived from categoryId). Cannot load tasks initially or use existing.")
             showEmptyState("Не указан номер задания для отображения.")
             updateNavigationUi()
         }
@@ -334,7 +308,9 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 } else {
                     it.visibility = View.GONE
                 }
+
             }
+
         }
 
         contentViewModel.taskAdditionalText.observe(viewLifecycleOwner, additionalTextObserver!!)
@@ -345,48 +321,42 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
     private fun setupAnswerCheckObserver() {
         contentViewModel.answerCheckResultLiveData.observe(viewLifecycleOwner, Observer { result ->
             if (!isAdded || view == null || result == null) return@Observer
-            Log.d(TAG_TASK_DISPLAY_BS, "AnswerCheckResult LiveData: Получен результат для taskId: ${result.taskId}")
+            Log.d(TAG_TASK_BS, "AnswerCheckResult LiveData: Получен результат для taskId: ${result.taskId}")
 
             val taskIndex = currentTasks.indexOfFirst { it.taskId == result.taskId }
             if (taskIndex == -1) {
-                Log.e(TAG_TASK_DISPLAY_BS, "Не найдена задача с taskId: ${result.taskId} в currentTasks")
+                Log.e(TAG_TASK_BS, "Не найдена задача с taskId: ${result.taskId} в currentTasks")
                 return@Observer
             }
 
             val task = currentTasks[taskIndex]
 
-            // Обновляем состояние задачи
             task.userAnswer = result.userAnswer
             task.attemptsMade++
             task.isCorrect = result.isCorrect
             task.correctAnswer = result.correctAnswer 
-            task.explanation = result.explanation // Сохраняем объяснение в TaskItem
+            task.explanation = result.explanation
             task.scoreAchieved = result.pointsAwarded
 
-            // Задание считается "решенным" (пройденным), как только сделана хотя бы одна попытка.
-            // Так как attemptsMade инкрементируется перед этой строкой, оно всегда будет >= 1 здесь.
             task.isSolved = true 
 
-            // Обновляем прогресс пользователя для ЛЮБОГО ответа
-            if (egeNumberForApi != null) {
-                contentViewModel.updateUserProgressForTask(task, egeNumberForApi!!)
-                Log.d(TAG_TASK_DISPLAY_BS, "Прогресс обновлен для задачи ${task.taskId} (любой ответ)")
+            val egeNumber = categoryId?.removePrefix("task_group_")
+            if (egeNumber != null) {
+                contentViewModel.updateUserProgressForTask(task, egeNumber)
+                Log.d(TAG_TASK_BS, "Прогресс обновлен для задачи ${task.taskId} (любой ответ)")
             } else {
-                Log.e(TAG_TASK_DISPLAY_BS, "egeNumberForApi is null, не могу обновить прогресс для задачи ${task.taskId}")
+                Log.e(TAG_TASK_BS, "egeNumber is null, не могу обновить прогресс для задачи ${task.taskId}")
             }
 
-            // Обновляем UI текущей отображаемой задачи, если это она
             if (taskIndex == currentActiveTaskIndex) {
-                // СНАЧАЛА обновляем UI панели номеров, чтобы отразить статус isSolved
                 updateTaskNumberSelection(currentActiveTaskIndex)
-                // Затем показываем детальный результат ответа внутри контента задания
                 displayAnswerResult(task, result) 
             }
         })
     }
 
     private fun displayAnswerResult(task: TaskItem, result: com.ruege.mobile.model.AnswerCheckResult) {
-        Log.d(TAG_TASK_DISPLAY_BS, "displayAnswerResult: task.isCorrect=${task.isCorrect}, task.explanation='${task.explanation}', result.explanation='${result.explanation}', result.correctAnswer='${result.correctAnswer}', result.userAnswer='${result.userAnswer}', result.pointsAwarded=${result.pointsAwarded}")
+        Log.d(TAG_TASK_BS, "displayAnswerResult: task.isCorrect=${task.isCorrect}, task.explanation='${task.explanation}', result.explanation='${result.explanation}', result.correctAnswer='${result.correctAnswer}', result.userAnswer='${result.userAnswer}', result.pointsAwarded=${result.pointsAwarded}")
         val taskContentView = taskContentContainer?.getChildAt(0) ?: return
         val answerInputLayout = taskContentView.findViewById<TextInputLayout>(R.id.answer_input_layout)
         val answerInputEditText = taskContentView.findViewById<TextInputEditText>(R.id.answer_input)
@@ -413,23 +383,21 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         var shortInfoText = ""
         if (task.scoreAchieved != null) shortInfoText += "Баллы: ${task.scoreAchieved} из ${task.maxPoints}."
         
-        if (task.isCorrect == false) { // Показываем правильный ответ только если ответ был неверный
+        if (task.isCorrect == false) {
              val correctAnswerDisplay = result.correctAnswer ?: "Н/Д"
              shortInfoText += "\nВаш ответ: ${result.userAnswer}\nПравильный ответ: $correctAnswerDisplay"
         } else if (task.isCorrect == true && result.userAnswer != result.correctAnswer && result.userAnswer.equals(result.correctAnswer, ignoreCase = true)) {
-            // Для случаев, когда ответ верный, но отображаемый "правильный ответ" (например, с другим регистром) полезен
              val correctAnswerDisplay = result.correctAnswer ?: "Н/Д"
             shortInfoText += "\nЭталонный ответ: $correctAnswerDisplay"
         }
 
         resultShortInfoTextView.text = shortInfoText.trim()
 
-        // Используем result.explanation, так как он содержит актуальное объяснение от сервера
         if (!result.explanation.isNullOrBlank()) { 
-            Log.d(TAG_TASK_DISPLAY_BS, "Explanation IS NOT BLANK (from result), showing: '${result.explanation}'")
+            Log.d(TAG_TASK_BS, "Explanation IS NOT BLANK (from result), showing: '${result.explanation}'")
             showExplanationButton.visibility = View.VISIBLE
             taskExplanationTextView.text = Html.fromHtml(result.explanation, Html.FROM_HTML_MODE_LEGACY)
-            taskExplanationTextView.visibility = View.GONE // Изначально скрыто
+            taskExplanationTextView.visibility = View.GONE
             showExplanationButton.text = "Показать объяснение"
             showExplanationButton.setOnClickListener {button ->
                 val isCurrentlyVisible = taskExplanationTextView.visibility == View.VISIBLE
@@ -437,7 +405,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 (button as Button).text = if (isCurrentlyVisible) "Показать объяснение" else "Скрыть объяснение"
             }
         } else {
-            Log.d(TAG_TASK_DISPLAY_BS, "Explanation IS BLANK or NULL (from result). Raw explanation value was: '${result.explanation}'")
+            Log.d(TAG_TASK_BS, "Explanation IS BLANK or NULL (from result). Raw explanation value was: '${result.explanation}'")
             showExplanationButton.visibility = View.GONE
             taskExplanationTextView.visibility = View.GONE
         }
@@ -449,7 +417,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         headerContainer?.visibility = View.GONE
         taskContentContainer?.visibility = View.GONE
         taskNavigationButtonsContainer?.visibility = View.GONE
-        Log.d(TAG_TASK_DISPLAY_BS, "Displaying Loading State")
+        Log.d(TAG_TASK_BS, "Displaying Loading State")
     }
 
     private fun showErrorState(message: String) {
@@ -459,7 +427,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         headerContainer?.visibility = View.GONE
         taskContentContainer?.visibility = View.GONE
         taskNavigationButtonsContainer?.visibility = View.GONE
-        Log.d(TAG_TASK_DISPLAY_BS, "Displaying Error State: $message")
+        Log.d(TAG_TASK_BS, "Displaying Error State: $message")
     }
 
     private fun showEmptyState(message: String = "Нет данных для отображения") {
@@ -469,7 +437,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         headerContainer?.visibility = View.GONE
         taskContentContainer?.visibility = View.GONE
         taskNavigationButtonsContainer?.visibility = View.GONE
-        Log.d(TAG_TASK_DISPLAY_BS, "Displaying Empty State: $message")
+        Log.d(TAG_TASK_BS, "Displaying Empty State: $message")
     }
 
     private fun showContentState() {
@@ -478,14 +446,14 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         headerContainer?.visibility = View.VISIBLE
         taskContentContainer?.visibility = View.VISIBLE
         taskNavigationButtonsContainer?.visibility = View.VISIBLE
-        Log.d(TAG_TASK_DISPLAY_BS, "Displaying Content State. headerContainer visible: ${headerContainer?.visibility == View.VISIBLE}, taskNavigationButtonsContainer visible: ${taskNavigationButtonsContainer?.visibility == View.VISIBLE}")
+        Log.d(TAG_TASK_BS, "Displaying Content State. headerContainer visible: ${headerContainer?.visibility == View.VISIBLE}, taskNavigationButtonsContainer visible: ${taskNavigationButtonsContainer?.visibility == View.VISIBLE}")
     }
 
     private fun setupTaskNavigation(tasks: List<TaskItem>): IntArray {
-        Log.d(TAG_TASK_DISPLAY_BS, "setupTaskNavigation called with ${tasks.size} tasks. CurrentActiveTaskIndex перед перестроением: $currentActiveTaskIndex")
+        Log.d(TAG_TASK_BS, "setupTaskNavigation called with ${tasks.size} tasks. CurrentActiveTaskIndex перед перестроением: $currentActiveTaskIndex")
         taskNumbersContainer?.removeAllViews()
         if (tasks.isEmpty()) {
-            Log.w(TAG_TASK_DISPLAY_BS, "setupTaskNavigation: tasks list is empty, hiding navigation scroll.")
+            Log.w(TAG_TASK_BS, "setupTaskNavigation: tasks list is empty, hiding navigation scroll.")
             taskNumbersScroll?.visibility = View.GONE
             return IntArray(0)
         }
@@ -505,7 +473,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     private fun showTaskAtIndex(index: Int) {
         if (index < 0 || index >= currentTasks.size) {
-            Log.e(TAG_TASK_DISPLAY_BS, "Invalid index $index for tasks size ${currentTasks.size}")
+            Log.e(TAG_TASK_BS, "Invalid index $index for tasks size ${currentTasks.size}")
             if (currentTasks.isEmpty()){
                 showEmptyState("Нет заданий для отображения.")
                 taskNumbersScroll?.visibility = View.GONE
@@ -523,22 +491,14 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
         contentViewModel.clearAdditionalTextState()
         if (task.textId != null) {
-            Log.d(TAG_TASK_DISPLAY_BS, "Запрос дополнительного текста для textId: ${task.textId}")
+            Log.d(TAG_TASK_BS, "Запрос дополнительного текста для textId: ${task.textId}")
             contentViewModel.requestTaskTextForCurrentTask(task.taskId)
         }
 
         taskContentContainer?.removeAllViews()
         val taskContentView = LayoutInflater.from(context).inflate(R.layout.view_task_content_detail, taskContentContainer, false)
         
-        // Диагностика с фонами
-        // taskContentContainer?.setBackgroundColor(android.graphics.Color.RED) // Родительский контейнер в основном макете
-        // taskContentView.setBackgroundColor(android.graphics.Color.BLUE)     // Корневой элемент view_task_content_detail.xml
-
-//        val taskScrollView = taskContentView.findViewById<NestedScrollView>(R.id.task_scroll_view)
-        // taskScrollView?.setBackgroundColor(android.graphics.Color.GREEN)
-        
         val taskContentTextView = taskContentView.findViewById<TextView>(R.id.task_content)
-        // taskContentTextView?.setBackgroundColor(android.graphics.Color.YELLOW)
         val textToggleContainer = taskContentView.findViewById<LinearLayout>(R.id.text_toggle_container)
         val showTextButton = taskContentView.findViewById<TextView>(R.id.show_text_button)
         val hideTextButton = taskContentView.findViewById<TextView>(R.id.hide_text_button)
@@ -547,23 +507,17 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
         val answerInputEditText = taskContentView.findViewById<TextInputEditText>(R.id.answer_input)
         val submitAnswerButton = taskContentView.findViewById<Button>(R.id.submit_answer)
         val resultContainer = taskContentView.findViewById<LinearLayout>(R.id.task_result_container)
-        // val resultStatusTextView = taskContentView.findViewById<TextView>(R.id.result_status) // эти поля используются в displayAnswerResult
-        // val resultShortInfoTextView = taskContentView.findViewById<TextView>(R.id.result_short_info)
-        // val showExplanationButton = taskContentView.findViewById<Button>(R.id.show_explanation_button)
-        // val taskExplanationTextView = taskContentView.findViewById<TextView>(R.id.task_explanation)
 
         val taskFullTitle = "Задание ${index + 1}: ${task.title}"
-        // val formattedTitle = "<b>${Html.escapeHtml(taskFullTitle)}</b>"
         
         taskContentTextView.post {
-            // Упрощенная установка текста для теста
             taskContentTextView.text = task.content
             taskContentTextView.requestLayout()
         }
 
         if (task.textId != null) {
             textToggleContainer.visibility = View.VISIBLE
-            additionalTextView.visibility = View.GONE // Возвращаем исходное состояние
+            additionalTextView.visibility = View.GONE
             showTextButton.visibility = View.VISIBLE
             hideTextButton.visibility = View.GONE
 
@@ -596,75 +550,58 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
             textToggleContainer.visibility = View.GONE
         }
 
-        // Показываем поле ввода и кнопку всегда, текст ответа берем из task.userAnswer, если есть
         answerInputLayout.visibility = View.VISIBLE
         submitAnswerButton.visibility = View.VISIBLE
-        answerInputEditText.setText(task.userAnswer ?: "") // Если пользователь ранее отвечал, покажем его ответ
-        answerInputEditText.isEnabled = true // Поле ввода всегда активно
+        answerInputEditText.setText(task.userAnswer ?: "")
+        answerInputEditText.isEnabled = true
 
-        // Блок результата по умолчанию скрыт при показе новой задачи
         resultContainer.visibility = View.GONE
 
         submitAnswerButton.setOnClickListener {
             val userAnswer = answerInputEditText.text.toString().trim()
             if (userAnswer.isNotEmpty()) {
-                Log.d(TAG_TASK_DISPLAY_BS, "Ответ пользователя для taskId ${task.taskId}: $userAnswer")
+                Log.d(TAG_TASK_BS, "Ответ пользователя для taskId ${task.taskId}: $userAnswer")
+                
                 contentViewModel.checkAnswer(task.taskId, userAnswer)
-                // После нажатия кнопки, результат будет показан через displayAnswerResult,
-                // который вызовется из Observer'a на answerCheckResultLiveData
             } else {
                 Toast.makeText(context, "Введите ваш ответ", Toast.LENGTH_SHORT).show()
             }
         }
         
-        // Старый блок if (task.isSolved) { ... } для показа результата здесь больше не нужен,
-        // так как displayAnswerResult() будет вызван наблюдателем LiveData.
-
         taskContentContainer?.addView(taskContentView)
         updateNavigationButtonsState(index)
         updateTaskNumberSelection(index)
     }
 
     private fun updateTaskNumberSelection(selectedIndex: Int) {
-        Log.d(TAG_TASK_DISPLAY_BS, "updateTaskNumberSelection: Вызван для selectedIndex: $selectedIndex. Всего задач: ${currentTasks.size}")
+        Log.d(TAG_TASK_BS, "updateTaskNumberSelection: Вызван для selectedIndex: $selectedIndex. Всего задач: ${currentTasks.size}")
         taskNumberViewIds?.let { ids ->
             if (selectedIndex < 0 || selectedIndex >= ids.size) {
-                Log.e(TAG_TASK_DISPLAY_BS, "updateTaskNumberSelection: selectedIndex ($selectedIndex) выходит за пределы ids (size: ${ids.size}). Пропускаем.")
+                Log.e(TAG_TASK_BS, "updateTaskNumberSelection: selectedIndex ($selectedIndex) выходит за пределы ids (size: ${ids.size}). Пропускаем.")
                 return
             }
             for (i in ids.indices) {
                 val button = view?.findViewById<TextView>(ids[i])
                 if (button == null) {
-                    Log.w(TAG_TASK_DISPLAY_BS, "updateTaskNumberSelection: Кнопка с ID ${ids[i]} не найдена для индекса $i")
+                    Log.w(TAG_TASK_BS, "updateTaskNumberSelection: Кнопка с ID ${ids[i]} не найдена для индекса $i")
                     continue
                 }
                 val isSelected = (i == selectedIndex)
                 val task = currentTasks.getOrNull(i)
 
                 if (isSelected) {
-                    // --- ВЫБРАННАЯ ЗАДАЧА ---
-                    // Сначала убедимся, что фоном является селектор
                     button.background = ContextCompat.getDrawable(requireContext(), R.drawable.item_task_number_bg_selector)
-                    button.isSelected = true // Активируем селектор для состояния selected
-                    button.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white)) // Текст: белый
+                    button.isSelected = true
+                    button.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white))
 
-                    // Прокрутка к выбранному элементу
-                    button.post {
-                        taskNumbersScroll?.smoothScrollTo(button.left, 0)
-                        Log.d(TAG_TASK_DISPLAY_BS, "updateTaskNumberSelection (post) for index $i: Scrolling to button.left (${button.left})")
-                    }
                 } else {
-                    // --- НЕВЫБРАННАЯ ЗАДАЧА ---
-                    button.isSelected = false // Деактивируем селектор для состояния selected
+                    button.isSelected = false
                     if (task != null && task.isSolved) {
-                        // РЕШЕНА и НЕ ВЫБРАНА:
-                        button.background = ContextCompat.getDrawable(requireContext(), R.drawable.item_task_number_bg_solved) // Желтый круг
-                        button.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black)) // Текст: черный (на желтом фоне)
+                        button.background = ContextCompat.getDrawable(requireContext(), R.drawable.item_task_number_bg_solved)
+                        button.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black))
                     } else {
-                        // НЕ РЕШЕНА и НЕ ВЫБРАНА:
-                        button.background = ContextCompat.getDrawable(requireContext(), R.drawable.item_task_number_bg_selector) // Обычный селектор (прозрачный круг с обводкой)
+                        button.background = ContextCompat.getDrawable(requireContext(), R.drawable.item_task_number_bg_selector)
                         
-                        // Цвет текста: используем атрибут темы для адаптивности
                         val textColorAttr = android.R.attr.textColorPrimary
                         val typedValue = android.util.TypedValue()
                         requireContext().theme.resolveAttribute(textColorAttr, typedValue, true)
@@ -672,7 +609,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     }
                 }
             }
-        } ?: Log.w(TAG_TASK_DISPLAY_BS, "updateTaskNumberSelection: taskNumberViewIds is null.")
+        } ?: Log.w(TAG_TASK_BS, "updateTaskNumberSelection: taskNumberViewIds is null.")
     }
 
     private fun updateNavigationButtonsState(currentIndex: Int) {
@@ -688,23 +625,18 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
             val scrollView = v as? HorizontalScrollView ?: return@setOnScrollChangeListener
             val childView = scrollView.getChildAt(0) ?: return@setOnScrollChangeListener
 
-            // Проверяем, достигнут ли конец прокрутки (например, 90% от полной ширины)
             val scrollPercentage = (scrollX.toDouble() / (childView.width - scrollView.width).toDouble()) * 100
-            // Log.d(TAG_TASK_DISPLAY_BS, "ScrollX: $scrollX, ChildWidth: ${childView.width}, ScrollViewWidth: ${scrollView.width}, Percentage: $scrollPercentage")
 
 
             if (scrollX >= (childView.width - scrollView.width) * 0.9 && egeNumberForApi != null && !isCurrentlyLoadingMoreLocal) {
-                 // Используем hasMoreTasksToLoad(id) если это метод, или hasMoreTasksToLoad.value?.get(id) если LiveData<Map>
-                 // Предположим, что hasMoreTasksToLoad(id) - это метод, возвращающий Boolean
                 val hasMore = contentViewModel.hasMoreTasksToLoad(egeNumberForApi!!)
-                Log.d(TAG_TASK_DISPLAY_BS, "Scroll near end. HasMore: $hasMore, IsLoadingMoreLocal: $isCurrentlyLoadingMoreLocal, isLoadingMoreVM: ${contentViewModel.isLoadingMoreTasks.value}")
+                Log.d(TAG_TASK_BS, "Scroll near end. HasMore: $hasMore, IsLoadingMoreLocal: $isCurrentlyLoadingMoreLocal, isLoadingMoreVM: ${contentViewModel.isLoadingMoreTasks.value}")
 
 
-                if (hasMore && contentViewModel.isLoadingMoreTasks.value != true) { // Добавили проверку isLoadingMoreTasks из VM
-                    Log.d(TAG_TASK_DISPLAY_BS, "Загрузка дополнительных задач для EGE номера: $egeNumberForApi")
+                if (hasMore && contentViewModel.isLoadingMoreTasks.value != true) {
+                    Log.d(TAG_TASK_BS, "Загрузка дополнительных задач для EGE номера: $egeNumberForApi")
                     isCurrentlyLoadingMoreLocal = true
-                    // loadMoreProgress?.visibility = View.VISIBLE // Управляется Observer'ом isLoadingMoreTasks
-                    contentViewModel.loadMoreTasksByCategory(egeNumberForApi!!) // Предполагаем, что этот метод существует и правильно работает
+                    contentViewModel.loadMoreTasksByCategory(egeNumberForApi!!)
                 }
             }
         }
@@ -758,35 +690,22 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        contentViewModel.tasks.removeObserver(tasksObserver!!)
-        contentViewModel.errorMessage.removeObserver(errorMessageObserver!!)
-        contentViewModel.taskAdditionalText.removeObserver(additionalTextObserver!!)
-        contentViewModel.taskAdditionalTextLoading.removeObserver(additionalTextLoadingObserver!!)
-        contentViewModel.taskAdditionalTextError.removeObserver(additionalTextErrorObserver!!)
+        tasksObserver?.let { contentViewModel.tasks.removeObserver(it) }
+        errorMessageObserver?.let { contentViewModel.errorMessage.removeObserver(it) }
+        additionalTextObserver?.let { contentViewModel.taskAdditionalText.removeObserver(it) }
+        additionalTextLoadingObserver?.let { contentViewModel.taskAdditionalTextLoading.removeObserver(it) }
+        additionalTextErrorObserver?.let { contentViewModel.taskAdditionalTextError.removeObserver(it) }
         isLoadingMoreTasksObserver?.let { contentViewModel.isLoadingMoreTasks.removeObserver(it) }
         taskBottomSheetTitle = null; tasksLoadingProgress = null; tvBottomSheetErrorMessage = null; headerContainer = null; taskNumbersScroll = null; taskNumbersContainer = null; taskContentContainer = null; taskNavigationButtonsContainer = null; btnPrevTask = null; btnNextTask = null; loadMoreProgress = null;
         currentTasks.clear()
         taskNumberViewIds = null
         egeNumberForApi = null
-        Log.d(TAG_TASK_DISPLAY_BS, "onDestroyView: Все ресурсы освобождены.")
+        Log.d(TAG_TASK_BS, "onDestroyView: Все ресурсы освобождены.")
     }
 
     private fun extractEgeNumberFromTitle(title: String): String? {
-        val regex = Regex("(?i)задание\\s+(\\d+)") 
-        val matchResult = regex.find(title)
+        val pattern = "Задание №?(\\d+)".toRegex()
+        val matchResult = pattern.find(title)
         return matchResult?.groups?.get(1)?.value
-    }
-
-    companion object {
-        const val TAG_TASK_DISPLAY_BS = "TaskDisplayBottomSheet"
-        @JvmStatic
-        fun newInstance(categoryId: String, title: String): TaskDisplayBottomSheetDialogFragment {
-            return TaskDisplayBottomSheetDialogFragment().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_CATEGORY_ID, categoryId)
-                    putString(ARG_TITLE, title)
-                }
-            }
-        }
     }
 } 

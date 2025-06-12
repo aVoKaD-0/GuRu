@@ -52,22 +52,17 @@ public class ExercisesAdapter extends RecyclerView.Adapter<ExercisesAdapter.Exer
         holder.difficultyTextView.setText("Сложность: " + item.getDifficulty());
 
         holder.buttonStartExercise.setOnClickListener(v -> {
-            // Получаем ID задания из объекта
             String taskId = item.getTaskId();
             
-            // Создаем фрагмент задания и открываем его
             TaskFragment taskFragment = new TaskFragment();
             Bundle args = new Bundle();
             
-            // Добавляем дополнительную проверку для корректной передачи ID
             if (taskId != null && !taskId.isEmpty()) {
                 Timber.d("Открываем задание с ID: %s", taskId);
                 args.putString("task_id", taskId);
             } else {
-                // Возможно, передается ID группы заданий вместо задания
                 String groupId = item.getContentId();
                 Timber.d("ID задания не найден, используем ID группы: %s", groupId);
-                // Предупреждаем пользователя о проблеме
                 Toast.makeText(v.getContext(), "Загружаем группу заданий: " + item.getTitle(), Toast.LENGTH_SHORT).show();
                 args.putString("task_id", groupId);
             }

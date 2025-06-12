@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.room.Room
 import com.ruege.mobile.data.local.AppDatabase
+import com.ruege.mobile.data.local.dao.ContentDao
 import com.ruege.mobile.data.local.dao.ProgressDao
 import com.ruege.mobile.data.local.dao.ProgressSyncQueueDao
 import com.ruege.mobile.data.local.entity.ProgressEntity
@@ -13,7 +14,7 @@ import com.ruege.mobile.data.local.entity.SyncStatus
 import com.ruege.mobile.data.network.api.ProgressApiService
 import com.ruege.mobile.data.network.dto.ProgressUpdateRequest
 import com.ruege.mobile.data.network.dto.response.ProgressSyncItemDto
-import com.ruege.mobile.util.NetworkUtils
+import com.ruege.mobile.utils.NetworkUtils
 import com.ruege.mobile.worker.ProgressSyncWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,17 @@ import com.ruege.mobile.data.mapper.parseJsonSolvedTaskIds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import androidx.lifecycle.asFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import com.ruege.mobile.data.local.dao.UserDao
+import com.ruege.mobile.data.local.entity.PracticeStatisticsEntity
+import com.ruege.mobile.data.mapper.toEntity
+import com.ruege.mobile.data.local.dao.PracticeStatisticsDao
+import com.ruege.mobile.data.network.api.PracticeApiService
+import com.ruege.mobile.data.repository.Result
+import com.ruege.mobile.data.repository.PracticeSyncRepository
+import com.ruege.mobile.data.network.dto.request.PracticeStatisticSyncDto
+import com.ruege.mobile.data.network.dto.request.PracticeStatisticsBranchRequest
 
 /**
  * Репозиторий для управления синхронизацией прогресса между локальной базой данных и сервером
@@ -39,13 +51,21 @@ class ProgressSyncRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val progressDao: ProgressDao,
     private val progressSyncQueueDao: ProgressSyncQueueDao,
-    private val progressApiService: ProgressApiService
+    private val progressApiService: ProgressApiService,
+    private val practiceApiService: PracticeApiService,
+    private val contentDao: ContentDao,
+    private val userDao: UserDao,
+    private val practiceStatisticsDao: PracticeStatisticsDao,
+    private val practiceSyncRepository: PracticeSyncRepository
 ) {
     private val TAG = "ProgressSyncRepository"
     private val PREFS_NAME = "ProgressSyncPrefs"
     private val KEY_LAST_SYNC_TIMESTAMP = "lastSyncTimestamp"
+    private val KEY_LAST_STATS_SYNC_TIMESTAMP = "lastStatsSyncTimestamp"
     private val KEY_COMPLETED_TASKS_COUNTER = "completedTasksCounter"
-    private val TASKS_THRESHOLD_FOR_SYNC = 20 // Порог количества заданий для синхронизации
+    private val TASKS_THRESHOLD_FOR_SYNC = 20
+
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val sharedPreferences: SharedPreferences by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -59,6 +79,15 @@ class ProgressSyncRepository @Inject constructor(
     private fun saveLastSyncTimestamp(timestamp: Long) {
         sharedPreferences.edit().putLong(KEY_LAST_SYNC_TIMESTAMP, timestamp).apply()
     }
+
+    private fun getLastStatsSyncTimestamp(): Long? {
+        val timestamp = sharedPreferences.getLong(KEY_LAST_STATS_SYNC_TIMESTAMP, -1L)
+        return if (timestamp == -1L) null else timestamp
+    }
+
+    private fun saveLastStatsSyncTimestamp(timestamp: Long) {
+        sharedPreferences.edit().putLong(KEY_LAST_STATS_SYNC_TIMESTAMP, timestamp).apply()
+    }
     
     private fun getCompletedTasksCounter(): Int {
         return sharedPreferences.getInt(KEY_COMPLETED_TASKS_COUNTER, 0)
@@ -68,29 +97,24 @@ class ProgressSyncRepository @Inject constructor(
         val currentCount = getCompletedTasksCounter()
         sharedPreferences.edit().putInt(KEY_COMPLETED_TASKS_COUNTER, currentCount + 1).apply()
         
-        // Проверяем, достигнут ли порог для синхронизации
         if ((currentCount + 1) >= TASKS_THRESHOLD_FOR_SYNC) {
             Log.d(TAG, "Достигнут порог в $TASKS_THRESHOLD_FOR_SYNC выполненных заданий, запускаем синхронизацию")
             
-            // Запускаем синхронизацию через Worker
             syncNow(true)
             
-            // Также запускаем прямую синхронизацию с сервером через API
-            GlobalScope.launch(Dispatchers.IO) {
+            repositoryScope.launch {
                 try {
                     Log.d(TAG, "Пороговая синхронизация: отправка прямого запроса на синхронизацию с сервером после $TASKS_THRESHOLD_FOR_SYNC заданий")
                     
-                    // Получаем все записи PENDING из очереди синхронизации (не более 100 за раз)
                     val pendingItems = progressSyncQueueDao.getItemsByStatusSync(SyncStatus.PENDING.getValue(), 100)
                     
                     if (pendingItems.isNotEmpty()) {
                         Log.d(TAG, "Пороговая синхронизация: найдено ${pendingItems.size} записей для синхронизации")
                         
-                        // Превращаем каждую запись в запрос и отправляем на сервер
                         pendingItems.forEach { item ->
                             try {
                                 val updateRequest = ProgressUpdateRequest(
-                                    contentId = item.contentId,
+                                    contentId = item.itemId,
                                     percentage = item.percentage,
                                     completed = item.isCompleted(),
                                     timestamp = item.timestamp,
@@ -100,30 +124,25 @@ class ProgressSyncRepository @Inject constructor(
                                 val response = progressApiService.updateProgress(updateRequest)
                                 
                                 if (response.isSuccessful) {
-                                    // Обновляем статус записи на SYNCED
                                     item.syncStatus = SyncStatus.SYNCED
                                     progressSyncQueueDao.update(item)
-                                    Log.d(TAG, "Пороговая синхронизация: успешно синхронизирован ${item.contentId}")
+                                    Log.d(TAG, "Пороговая синхронизация: успешно синхронизирован ${item.itemId}")
                                 } else {
-                                    // В случае ошибки помечаем как FAILED
                                     item.syncStatus = SyncStatus.FAILED
                                     progressSyncQueueDao.update(item)
-                                    Log.e(TAG, "Пороговая синхронизация: ошибка синхронизации ${item.contentId}, код ${response.code()}")
+                                    Log.e(TAG, "Пороговая синхронизация: ошибка синхронизации ${item.itemId}, код ${response.code()}")
                                 }
                             } catch (e: Exception) {
-                                Log.e(TAG, "Пороговая синхронизация: исключение при синхронизации ${item.contentId}", e)
-                                // В случае исключения помечаем как FAILED
+                                Log.e(TAG, "Пороговая синхронизация: исключение при синхронизации ${item.itemId}", e)
                                 item.syncStatus = SyncStatus.FAILED
                                 progressSyncQueueDao.update(item)
                             }
                         }
                         
-                        // После обработки всех записей запрашиваем новый прогресс с сервера
                         forceSyncWithServer()
                     } else {
                         Log.d(TAG, "Пороговая синхронизация: нет записей для синхронизации, запрашиваем актуальный прогресс с сервера")
                         
-                        // Даже если нет записей для синхронизации, запрашиваем новый прогресс
                         forceSyncWithServer()
                     }
                 } catch (e: Exception) {
@@ -131,7 +150,6 @@ class ProgressSyncRepository @Inject constructor(
                 }
             }
             
-            // Сбрасываем счетчик после синхронизации
             resetCompletedTasksCounter()
         } else {
             Log.d(TAG, "Счетчик заданий увеличен до ${currentCount + 1}, порог для синхронизации: $TASKS_THRESHOLD_FOR_SYNC")
@@ -153,14 +171,13 @@ class ProgressSyncRepository @Inject constructor(
         val timestamp = System.currentTimeMillis()
         val userId = progress.getUserId()
         
-        // Получаем список решенных задач из ProgressEntity
         val solvedTaskIds = progress.getSolvedTaskIds()
         
-        Log.d(TAG, "🔄 Добавление в очередь синхронизации: contentId=${progress.getContentId()}, percentage=${progress.getPercentage()}, completed=${progress.isCompleted()}, syncImmediately=$syncImmediately")
+        Log.d(TAG, "🔄 Добавление в очередь синхронизации: itemId=${progress.getContentId()}, percentage=${progress.getPercentage()}, completed=${progress.isCompleted()}, syncImmediately=$syncImmediately")
         
-        // Создаем новую запись для очереди синхронизации
         val syncQueueEntity = ProgressSyncQueueEntity(
             progress.getContentId(),
+            ProgressSyncQueueEntity.ITEM_TYPE_PROGRESS,
             progress.getPercentage(),
             progress.isCompleted(),
             timestamp,
@@ -169,37 +186,29 @@ class ProgressSyncRepository @Inject constructor(
             solvedTaskIds
         )
         
-        // Проверяем, есть ли уже запись с таким же contentId
-        val existingItem = progressSyncQueueDao.getItemByContentId(progress.getContentId())
+        val existingItem = progressSyncQueueDao.getItemByItemId(progress.getContentId())
         
         if (existingItem != null) {
-            // Если запись уже есть, обновляем её id
             syncQueueEntity.setId(existingItem.id)
-            Log.d(TAG, "🔄 Обновляем существующую запись в очереди: contentId=${progress.getContentId()}, id=${existingItem.id}")
+            Log.d(TAG, "🔄 Обновляем существующую запись в очереди: itemId=${progress.getContentId()}, id=${existingItem.id}")
         }
         
-        // Добавляем запись в очередь
         val id = progressSyncQueueDao.insert(syncQueueEntity)
-        Log.d(TAG, "🔄 Добавлен прогресс в очередь синхронизации: contentId=${progress.getContentId()}, id=$id")
+        Log.d(TAG, "🔄 Добавлен прогресс в очередь синхронизации: itemId=${progress.getContentId()}, id=$id")
         
-        // Если задание выполнено (100%), увеличиваем счетчик выполненных заданий
         if (progress.isCompleted() && progress.contentId.startsWith("task_group_")) {
             incrementCompletedTasksCounter()
             Log.d(TAG, "🔄 Увеличен счетчик выполненных заданий для: ${progress.getContentId()}")
         }
         
-        // Если запрошена немедленная синхронизация (при открытии или закрытии приложения), 
-        // то выполняем её независимо от счетчика заданий
         if (syncImmediately && NetworkUtils.isNetworkAvailable(context)) {
             Log.d(TAG, "🔄 Запрошена принудительная синхронизация для ${progress.getContentId()}, запускаем немедленно")
             ProgressSyncWorker.startOneTimeSync(context, true)
-            // Добавляем прямой вызов syncNow для надежности
             syncNow(true, false)
             Log.d(TAG, "🔄 Прямой вызов syncNow для немедленной синхронизации contentId=${progress.getContentId()}")
         } else {
             Log.d(TAG, "🔄 Синхронизация для ${progress.getContentId()} добавлена в очередь (syncImmediately=$syncImmediately, сеть: ${NetworkUtils.isNetworkAvailable(context)})")
             
-            // Проверяем счетчик заданий и запускаем синхронизацию, если нужно
             val completedCount = getCompletedTasksCounter()
             Log.d(TAG, "🔄 Текущий счетчик выполненных заданий: $completedCount")
             
@@ -273,30 +282,23 @@ class ProgressSyncRepository @Inject constructor(
      * @param isAppClosing выполняется ли синхронизация при закрытии приложения
      */
     fun syncNow(expedited: Boolean = true, isAppClosing: Boolean = false) {
-        // Проверяем доступность сети перед запуском синхронизации
         if (!NetworkUtils.isNetworkAvailable(context)) {
             Log.w(TAG, "Синхронизация отложена: сеть недоступна")
             return
         }
         
-        // Если это закрытие приложения или требуется немедленная синхронизация,
-        // выполняем пакетную синхронизацию напрямую без Worker
         if (isAppClosing || expedited) {
             Log.d(TAG, "Запуск batch-синхронизации ${if (isAppClosing) "при закрытии приложения" else "с высоким приоритетом"}")
             
-            // Запускаем в отдельном потоке
-            val job = GlobalScope.launch(Dispatchers.IO) {
+            val job = repositoryScope.launch {
                 try {
-                    // Получаем все записи PENDING из очереди синхронизации
                     val pendingItems = progressSyncQueueDao.getItemsByStatusSync(SyncStatus.PENDING.getValue(), 100)
                     
                     if (pendingItems.isNotEmpty()) {
                         Log.d(TAG, "Batch-синхронизация: найдено ${pendingItems.size} записей")
                         
-                        // Пакетная обработка
                         processSyncItems(pendingItems)
                         
-                        // Обновляем timestamp последней синхронизации
                         saveLastSyncTimestamp(System.currentTimeMillis())
                     } else {
                         Log.d(TAG, "Batch-синхронизация: нет записей для синхронизации")
@@ -306,7 +308,6 @@ class ProgressSyncRepository @Inject constructor(
                 }
             }
             
-            // Для закрытия приложения ждем завершения с таймаутом
             if (isAppClosing) {
                 try {
                     kotlinx.coroutines.runBlocking { 
@@ -319,7 +320,6 @@ class ProgressSyncRepository @Inject constructor(
                 }
             }
         } else {
-            // Для неприоритетных запросов используем Worker
             ProgressSyncWorker.startOneTimeSync(context, false)
             Log.d(TAG, "Запущена фоновая синхронизация через Worker")
         }
@@ -348,21 +348,17 @@ class ProgressSyncRepository @Inject constructor(
     fun initialize() {
         Log.d(TAG, "🚀 Инициализация ProgressSyncRepository начата")
         
-        // Обновляем кэш для работы с репозиторием
         try {
-            GlobalScope.launch(Dispatchers.IO) {
-                // Подсчитываем количество записей в очереди
+            repositoryScope.launch {
                 val pendingCount = progressSyncQueueDao.getCountByStatusSync(SyncStatus.PENDING.getValue())
                 val failedCount = progressSyncQueueDao.getCountByStatusSync(SyncStatus.FAILED.getValue())
                 val totalCount = progressSyncQueueDao.getAllItemsSync().size
                 
                 Log.d(TAG, "🚀 Статистика очереди синхронизации: pending=$pendingCount, failed=$failedCount, всего=$totalCount")
                 
-                // Планируем периодическую синхронизацию
                 ProgressSyncWorker.schedulePeriodicSync(context)
                 Log.d(TAG, "🚀 Периодическая синхронизация запланирована")
                 
-                // Если есть ожидающие записи, запускаем синхронизацию сразу
                 if (pendingCount > 0 && NetworkUtils.isNetworkAvailable(context)) {
                     Log.d(TAG, "🚀 Обнаружены ожидающие записи ($pendingCount), запускаем немедленную синхронизацию")
                     syncNow(true)
@@ -390,10 +386,10 @@ class ProgressSyncRepository @Inject constructor(
                 return@withContext false
             }
             
-            // Сначала проверяем наличие элементов в очереди и отправляем их
-            val pendingItems = progressSyncQueueDao.getItemsByStatusSync(SyncStatus.PENDING.getValue(), 100)
+            val statusesToSync = listOf(SyncStatus.PENDING.getValue(), SyncStatus.FAILED.getValue())
+            val pendingItems = progressSyncQueueDao.getItemsByStatusesSync(statusesToSync, 100)
             if (pendingItems.isNotEmpty()) {
-                Log.d(TAG, "🔄 Найдено ${pendingItems.size} элементов в очереди, отправляем перед запросом синхронизации")
+                Log.d(TAG, "🔄 Найдено ${pendingItems.size} элементов в очереди (PENDING или FAILED), отправляем перед запросом синхронизации")
                 val syncSuccess = processSyncItems(pendingItems)
                 if (!syncSuccess) {
                     Log.w(TAG, "⚠️ Не удалось отправить элементы из очереди")
@@ -406,7 +402,6 @@ class ProgressSyncRepository @Inject constructor(
             Log.d(TAG, "🕒 Запрашиваем синхронизацию прогресса с timestamp: $lastTimestamp")
             
             try {
-                // Получаем прогресс с сервера, передавая lastTimestamp
                 val response = progressApiService.syncProgress(lastTimestamp)
                 
                 if (response.isSuccessful) {
@@ -421,7 +416,6 @@ class ProgressSyncRepository @Inject constructor(
                             }
                             
                             if (entitiesToInsert.isNotEmpty()) {
-                                // Получаем список существующих ID контента и их временные метки
                                 val existingProgressMap = progressDao.getAllProgressListSync().associateBy { it.getContentId() }
 
                                 val toUpdate = mutableListOf<ProgressEntity>()
@@ -432,54 +426,43 @@ class ProgressSyncRepository @Inject constructor(
                                     val localEntity = existingProgressMap[serverEntity.getContentId()]
 
                                     if (localEntity != null) {
-                                        // Запись существует локально
                                         if (serverEntity.getLastAccessed() > localEntity.getLastAccessed()) {
-                                            // Данные на сервере новее или такие же
-                                            // Объединяем solvedTaskIds
                                             val localSolvedIds = localEntity.getSolvedTaskIdsList().toMutableSet()
                                             val serverSolvedIds = serverEntity.getSolvedTaskIdsList()
                                             localSolvedIds.addAll(serverSolvedIds)
                                             
-                                            val mergedEntity = serverEntity // Берем за основу серверную, т.к. она новее в целом
+                                            val mergedEntity = serverEntity
                                             mergedEntity.setSolvedTaskIds(ProgressEntity.listToJsonString(localSolvedIds.toList()))
-                                            // Пересчитываем процент и completed на основе объединенных solvedTaskIds
-                                            val totalTasks = getTotalTasksCount(mergedEntity.getContentId()) // Нужна эта функция
-                                            val newPercentage = calculatePercentage(localSolvedIds.size, totalTasks) // Нужна эта функция
+                                            val totalTasks = getTotalTasksCount(mergedEntity.getContentId())
+                                            val newPercentage = calculatePercentage(localSolvedIds.size, totalTasks)
                                             mergedEntity.setPercentage(newPercentage)
                                             mergedEntity.setCompleted(newPercentage >= 100)                                           
-                                            // Убедимся, что lastAccessed берется максимальный из двух
                                             mergedEntity.setLastAccessed(maxOf(serverEntity.getLastAccessed(), localEntity.getLastAccessed()))
                                             toUpdate.add(mergedEntity)
                                             Log.d(TAG, "✅ Обновление с объединением для ${serverEntity.getContentId()}, сервер новее или равен. Сервер: ${serverEntity.getLastAccessed()}, Локально: ${localEntity.getLastAccessed()}. Объединенные ID: ${localSolvedIds.size}")
                                         } else {
-                                            // Локальные данные новее, их нужно отправить на сервер
-                                            // Не обновляем локальные данные серверными, а ставим локальные в очередь на синхронизацию
                                             toQueueForSync.add(localEntity)
                                             Log.d(TAG, "✅ Локальные данные для ${localEntity.getContentId()} новее серверных. Сервер: ${serverEntity.getLastAccessed()}, Локально: ${localEntity.getLastAccessed()}. Будет добавлено в очередь.")
                                         }
                                     } else {
-                                        // Новая запись с сервера
                                         toInsert.add(serverEntity)
                                         Log.d(TAG, "✅ Новая запись с сервера для ${serverEntity.getContentId()}")
                                     }
                                 }
                                 
-                                // Обновляем существующие записи
                                 if (toUpdate.isNotEmpty()) {
                                     progressDao.updateAll(toUpdate)
                                     Log.d(TAG, "✅ Успешно обновлено ${toUpdate.size} существующих записей прогресса после объединения")
                                 }
                                 
-                                // Вставляем новые записи
                                 if (toInsert.isNotEmpty()) {
                                     progressDao.insertAll(toInsert)
                                     Log.d(TAG, "✅ Успешно добавлено ${toInsert.size} новых записей прогресса")
                                 }
 
-                                // Добавляем в очередь на синхронизацию те локальные записи, что оказались новее серверных
                                 if (toQueueForSync.isNotEmpty()) {
                                     for (entityToSync in toQueueForSync) {
-                                        queueProgressUpdate(entityToSync, true) // syncImmediately = true
+                                        queueProgressUpdate(entityToSync, true)
                                     }
                                     Log.d(TAG, "✅ Добавлено в очередь на синхронизацию ${toQueueForSync.size} локально обновленных записей")
                                 }
@@ -487,20 +470,19 @@ class ProgressSyncRepository @Inject constructor(
                                 Log.d(TAG, "✅ Всего обработано ${entitiesToInsert.size} записей прогресса (обновлено с объединением: ${toUpdate.size}, новых: ${toInsert.size}, поставлено в очередь: ${toQueueForSync.size})")
                             }
                             
-                            // Обновляем метку времени последней синхронизации
                             val maxTimestamp = serverProgressDtoList.mapNotNull { it.timestamp }.maxOrNull() ?: System.currentTimeMillis()
                             saveLastSyncTimestamp(maxTimestamp)
                             Log.d(TAG, "🕒 Сохранена новая метка времени синхронизации: $maxTimestamp")
                         } else {
                             Log.d(TAG, "ℹ️ Сервер вернул пустой список прогресса")
                             
-                            // Если это был полный запрос, сохраняем текущее время
                             if (lastTimestamp == null) {
                                 val currentTime = System.currentTimeMillis()
                                 saveLastSyncTimestamp(currentTime)
                                 Log.d(TAG, "🕒 Сохранена текущая метка времени: $currentTime")
                             }
                         }
+                        syncStatisticsWithServer()
                         return@withContext true
                     } else {
                         Log.w(TAG, "⚠️ Сервер вернул null вместо списка прогресса")
@@ -535,17 +517,14 @@ class ProgressSyncRepository @Inject constructor(
      */
     suspend fun syncContentImmediately(contentId: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Проверяем, есть ли сеть
             if (!NetworkUtils.isNetworkAvailable(context)) {
                 Log.w(TAG, "Network not available, can't sync content $contentId")
                 return@withContext false
             }
             
-            // Загружаем прогресс для этого контента
             val progressEntity = progressDao.getProgressByContentId(contentId).value
             
             if (progressEntity != null) {
-                // Создаем DTO для запроса
                 val updateRequest = ProgressUpdateRequest(
                     contentId = progressEntity.getContentId(),
                     percentage = progressEntity.getPercentage(),
@@ -554,7 +533,6 @@ class ProgressSyncRepository @Inject constructor(
                     solvedTaskIds = parseJsonSolvedTaskIds(progressEntity.getSolvedTaskIds())
                 )
                 
-                // Отправляем запрос на сервер
                 val response = progressApiService.updateProgress(updateRequest)
                 
                 if (response.isSuccessful) {
@@ -587,11 +565,8 @@ class ProgressSyncRepository @Inject constructor(
      */
     suspend fun getAvailableContentIds(): List<String> = withContext(Dispatchers.IO) {
         try {
-            // Получаем список ID контента из ContentDao
-            val db = AppDatabase.getInstance(context)
-            val contentIds = db.contentDao().getAllContentIds()
+            val contentIds = contentDao.getAllContentIds()
             
-            // Если нет записей, возвращаем базовые ID для типов заданий
             if (contentIds.isEmpty()) {
                 Log.w(TAG, "В таблице contents нет записей, используем фиксированный список ID для типов заданий")
                 return@withContext getLocalTaskTypeContentIds()
@@ -601,15 +576,13 @@ class ProgressSyncRepository @Inject constructor(
             return@withContext contentIds
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка при получении доступных ID контента", e)
-            // В случае ошибки возвращаем пустой список
             return@withContext emptyList()
         }
     }
 
     private suspend fun getLocalTaskTypeContentIds(): List<String> {
         return withContext(Dispatchers.IO) {
-            // Эта логика может быть заменена на запрос к ContentDao, если типы заданий хранятся там
-            (1..27).map { "task_group_$it" } // Изменено task_type_ на task_group_
+            (1..27).map { "task_group_$it" }
         }
     }
 
@@ -618,46 +591,49 @@ class ProgressSyncRepository @Inject constructor(
      * @param items список элементов для синхронизации
      * @return true, если синхронизация прошла успешно
      */
-    private suspend fun processSyncItems(items: List<ProgressSyncQueueEntity>): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun processSyncItems(items: List<ProgressSyncQueueEntity>): Boolean {
         if (items.isEmpty()) {
             Log.d(TAG, "Нет элементов для синхронизации")
-            return@withContext true
+            return true
         }
-        
+
         Log.d(TAG, "📊 Начинаем обработку пакетной синхронизации для ${items.size} элементов")
-        
+
+        val progressItems = items.filter { it.itemType == ProgressSyncQueueEntity.ITEM_TYPE_PROGRESS }
+        val statisticsItems = items.filter { it.itemType == ProgressSyncQueueEntity.ITEM_TYPE_STATISTICS }
+
+        var progressSyncSuccess = true
+        if (progressItems.isNotEmpty()) {
+            progressSyncSuccess = processProgressItems(progressItems)
+        }
+
+        var statisticsSyncSuccess = true
+        if (statisticsItems.isNotEmpty()) {
+            statisticsSyncSuccess = processStatisticsItems(statisticsItems)
+        }
+
+        return progressSyncSuccess && statisticsSyncSuccess
+    }
+
+    private suspend fun processProgressItems(items: List<ProgressSyncQueueEntity>): Boolean {
+        Log.d(TAG, "📊 Обработка ${items.size} элементов прогресса для batch-синхронизации")
         try {
-            // Группируем элементы по contentId для избежания дублирования
-            val groupedItems = items.groupBy { it.contentId }
+            val groupedItems = items.groupBy { it.itemId }
+            val latestItems = groupedItems.mapValues { (_, items) -> items.maxByOrNull { it.timestamp } }.values.filterNotNull()
             
-            // Для каждого contentId берем самый свежий элемент
-            val latestItems = groupedItems.mapValues { (_, items) -> 
-                items.maxByOrNull { it.timestamp } 
-            }.values.filterNotNull()
+            Log.d(TAG, "📊 Обработка ${latestItems.size} уникальных элементов прогресса (было ${items.size})")
             
-            Log.d(TAG, "📊 Обработка ${latestItems.size} элементов прогресса для batch-синхронизации (было ${items.size})")
-            
-            // Получаем все нужные progressEntity из базы за один запрос
-            val contentIds = latestItems.map { it.contentId }
-            Log.d(TAG, "📊 ContentIds для синхронизации: $contentIds")
+            val contentIds = latestItems.map { it.itemId }
             val progressEntities = progressDao.getProgressByContentIdsSync(contentIds)
-            
-            // Создаем карту contentId -> progressEntity для быстрого поиска
             val progressEntityMap = progressEntities.associateBy { it.getContentId() }
             
-            // Создаем запросы для обновления, используя кэшированные данные
             val updateRequests = latestItems.map { item ->
-                // Ищем объект в карте
-                val progressEntity = progressEntityMap[item.contentId]
-                
-                // Если прогресс найден, используем его данные, иначе создаем из элемента очереди
+                val progressEntity = progressEntityMap[item.itemId]
                 if (progressEntity != null) {
-                    Log.d(TAG, "📊 Используем данные из progressEntity для ${item.contentId}, percentage=${progressEntity.getPercentage()}, completed=${progressEntity.isCompleted()}")
                     toProgressUpdateDto(progressEntity)
                 } else {
-                    Log.d(TAG, "📊 Создаем запрос из очереди для ${item.contentId}, percentage=${item.percentage}, completed=${item.isCompleted()}")
                     ProgressUpdateRequest(
-                        contentId = item.contentId,
+                        contentId = item.itemId,
                         percentage = item.percentage,
                         completed = item.isCompleted(),
                         timestamp = item.timestamp,
@@ -667,75 +643,120 @@ class ProgressSyncRepository @Inject constructor(
             }
             
             if (updateRequests.isEmpty()) {
-                Log.d(TAG, "Нет запросов для обновления после фильтрации")
-                return@withContext true
+                Log.d(TAG, "Нет запросов для обновления прогресса после фильтрации")
+                return true
             }
             
-            Log.d(TAG, "📊 Отправляем batch-запрос на сервер для ${updateRequests.size} элементов")
-            // Логируем запросы для диагностики
-            updateRequests.forEach { request ->
-                Log.d(TAG, "📊 Запрос: contentId=${request.contentId}, percentage=${request.percentage}, completed=${request.completed}")
-            }
+            Log.d(TAG, "📊 Отправляем batch-запрос прогресса на сервер для ${updateRequests.size} элементов")
             
-            // Проверяем сетевое подключение перед отправкой
-            if (!NetworkUtils.isNetworkAvailable(context)) {
-                Log.w(TAG, "❌ Сеть недоступна. Синхронизация отложена.")
-                return@withContext false
-            }
-            
-            Log.d(TAG, "📊 Отправка запроса на URL: ${progressApiService.javaClass.name}")
-            
-            // Отправляем batch-запрос на сервер
             val response = progressApiService.updateProgressBatch(updateRequests)
             
-            Log.d(TAG, "📊 Получен ответ от сервера: isSuccessful=${response.isSuccessful}, code=${response.code()}")
+            Log.d(TAG, "📊 Получен ответ от сервера для прогресса: isSuccessful=${response.isSuccessful}, code=${response.code()}")
             
             if (response.isSuccessful) {
-                val responseList = response.body()
+                val responseList = response.body() ?: emptyList()
+                val responseMap = responseList.associateBy { it.contentId }
                 
-                if (responseList != null) {
-                    Log.d(TAG, "📊 Получен список ответов от сервера: size=${responseList.size}")
-                    // Создаем карту contentId -> ответ для быстрого поиска
-                    val responseMap = responseList.associateBy { it.contentId }
-                    
-                    // Обновляем статус всех исходных элементов
-                    for (item in items) {
-                        // Находим соответствующий ответ по content_id
-                        val itemResponse = responseMap[item.contentId]
-                        
-                        // Если нашли ответ для этого элемента и он успешный, помечаем как SYNCED
-                        if (itemResponse != null && itemResponse.success) {
-                            item.syncStatus = SyncStatus.SYNCED
-                        } else {
-                            // Если элемент не найден в ответах или неуспешный, помечаем как FAILED
-                            item.syncStatus = SyncStatus.FAILED
-                        }
-                        
-                        progressSyncQueueDao.update(item)
-                    }
-                    
-                    val allSuccess = responseList.all { it.success }
-                    Log.d(TAG, "Batch-синхронизация завершена, обновлено ${items.size} элементов, все успешно: $allSuccess")
-                    return@withContext true
-                } else {
-                    Log.e(TAG, "Сервер вернул пустой список ответов при batch-синхронизации")
-                }
-            } else {
-                Log.e(TAG, "Ошибка при batch-синхронизации: ${response.code()} ${response.message()}")
-                
-                // Если это проблема авторизации, пометим все как FAILED
-                if (response.code() == 401 || response.code() == 403) {
-                    for (item in items) {
+                for (item in items) {
+                    val itemResponse = responseMap[item.itemId]
+                    if (itemResponse?.success == true) {
+                        item.syncStatus = SyncStatus.SYNCED
+                    } else {
                         item.syncStatus = SyncStatus.FAILED
-                        progressSyncQueueDao.update(item)
                     }
+                    progressSyncQueueDao.update(item)
+                }
+                
+                val allSuccess = responseList.all { it.success }
+                Log.d(TAG, "Batch-синхронизация прогресса завершена, все успешно: $allSuccess")
+                return allSuccess
+            } else {
+                Log.e(TAG, "Ошибка при batch-синхронизации прогресса: ${response.code()} ${response.message()}")
+                items.forEach { item ->
+                    item.syncStatus = SyncStatus.FAILED
+                    progressSyncQueueDao.update(item)
+                }
+                return false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Исключение при batch-синхронизации прогресса", e)
+            items.forEach { item ->
+                item.syncStatus = SyncStatus.FAILED
+                progressSyncQueueDao.update(item)
+            }
+            return false
+        }
+    }
+
+    private suspend fun processStatisticsItems(items: List<ProgressSyncQueueEntity>): Boolean {
+        Log.d(TAG, "📊 Обработка ${items.size} элементов статистики для batch-синхронизации.")
+        try {
+            val updateRequests = items.mapNotNull { item ->
+                val statsEntity = practiceStatisticsDao.getStatisticsByEgeNumberSync(item.itemId)
+                statsEntity?.let {
+                    PracticeStatisticSyncDto(
+                        egeNumber = it.egeNumber,
+                        totalAttempts = it.totalAttempts,
+                        correctAttempts = it.correctAttempts,
+                        lastAttemptDate = it.lastAttemptDate
+                    )
                 }
             }
+
+            if (updateRequests.isEmpty()) {
+                Log.w(TAG, "Нет валидных элементов статистики для синхронизации после поиска в БД.")
+                items.forEach { item ->
+                    item.syncStatus = SyncStatus.FAILED
+                    progressSyncQueueDao.update(item)
+                }
+                return true
+            }
+
+            val userId = userDao.getFirstUser()?.getUserId()?.toString()
+            if (userId == null) {
+                Log.e(TAG, "Не удалось получить ID пользователя для синхронизации статистики.")
+                return false
+            }
+            val lastSyncTimestamp = getLastStatsSyncTimestamp() ?: 0L
+
+            val request = PracticeStatisticsBranchRequest(
+                userId = userId,
+                lastKnownServerSyncTimestamp = lastSyncTimestamp,
+                newOrUpdatedAggregatedStatistics = updateRequests,
+                newAttempts = emptyList()
+            )
+
+            val response = practiceApiService.updatePracticeStatistics(request)
             
-            return@withContext false
+            Log.d(TAG, "📊 Получен ответ от сервера для статистики: isSuccessful=${response.isSuccessful}, code=${response.code()}")
+
+            if (response.isSuccessful) {
+                val branchResponse = response.body()
+                if (branchResponse != null) {
+                    saveLastStatsSyncTimestamp(branchResponse.newServerSyncTimestamp)
+                    Log.d(TAG, "🕒 Сохранена новая метка времени синхронизации статистики из branch-ответа: ${branchResponse.newServerSyncTimestamp}")
+                }
+                items.forEach { item ->
+                    item.syncStatus = SyncStatus.SYNCED
+                    progressSyncQueueDao.update(item)
+                }
+                Log.d(TAG, "Batch-синхронизация статистики успешно завершена.")
+                return true
+            } else {
+                Log.e(TAG, "Batch-синхронизация статистики не удалась: ${response.code()} ${response.message()}")
+                items.forEach { item ->
+                    item.syncStatus = SyncStatus.FAILED
+                    progressSyncQueueDao.update(item)
+                }
+                return false
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Исключение при batch-синхронизации", e)
-            return@withContext false
+            Log.e(TAG, "Ошибка во время batch-синхронизации статистики", e)
+             items.forEach { item ->
+                item.syncStatus = SyncStatus.FAILED
+                progressSyncQueueDao.update(item)
+            }
+            return false
         }
     }
 
@@ -747,71 +768,45 @@ class ProgressSyncRepository @Inject constructor(
      */
     suspend fun addSolvedTask(taskGroupId: String, solvedTaskId: String, syncImmediately: Boolean = false) = withContext(Dispatchers.IO) {
         try {
-            // Получаем текущий прогресс
             var progressEntity = progressDao.getProgressByContentIdSync(taskGroupId)
 
-            // Если сущность ProgressEntity не найдена, создаем новую
             if (progressEntity == null) {
                 Log.d(TAG, "Прогресс для группы $taskGroupId не найден, создаем новый.")
-                // Важно: Убедитесь, что у вас есть конструктор или фабричный метод для ProgressEntity,
-                // который принимает taskGroupId и устанавливает начальные значения.
-                // Предполагается, что ProgressEntity имеет конструктор или метод для инициализации с contentId.
-                // Если у вас есть поле userId в ProgressEntity, его также нужно установить.
-                // Пример: progressEntity = ProgressEntity(contentId = taskGroupId, userId = getCurrentUserId())
-                // Для простоты, предположим, что ProgressEntity может быть создан с taskGroupId
-                // и остальные поля будут установлены ниже или имеют значения по умолчанию.
-                // Вам нужно будет адаптировать эту часть под вашу структуру ProgressEntity.
-                // ВАЖНО: Убедитесь, что вы правильно устанавливаете userId, если он используется.
-                // В данном примере userId не устанавливается явно, предполагая, что он либо не нужен
-                // для этой операции, либо будет установлен в другом месте, либо ProgressEntity() его обработает.
-                progressEntity = ProgressEntity() // Убедитесь, что этот конструктор корректен или используйте подходящий
+                progressEntity = ProgressEntity()
                 progressEntity.setContentId(taskGroupId)
-                // Устанавливаем начальные значения для новой сущности, если это необходимо
                 progressEntity.setPercentage(0)
                 progressEntity.setCompleted(false)
                 progressEntity.setLastAccessed(System.currentTimeMillis())
-                progressEntity.setSolvedTaskIds("[]") // Пустой JSON массив для solvedTaskIds
+                progressEntity.setSolvedTaskIds("[]")
 
-                // Сохраняем новую сущность в БД перед тем, как добавлять в нее решенные задания
-                // Это важно, так как дальнейшая логика может полагаться на существующую запись
                 progressDao.insert(progressEntity)
                 Log.d(TAG, "Новая сущность ProgressEntity для $taskGroupId создана и сохранена.")
-                // Перезагружаем сущность из БД, чтобы убедиться, что работаем с актуальной версией
-                // (особенно если insert возвращает id или есть авто-инкрементные поля)
                 progressEntity = progressDao.getProgressByContentIdSync(taskGroupId)
                 if (progressEntity == null) {
                     Log.e(TAG, "Не удалось создать или получить ProgressEntity для $taskGroupId после insert.")
-                    return@withContext false // Выходим, если создание не удалось
+                    return@withContext false
                 }
             }
             
-            // Получаем текущий список решенных заданий
             val currentSolved = progressEntity.getSolvedTaskIdsList().toMutableList()
             
-            // Проверяем, не добавлено ли уже это задание
             if (!currentSolved.contains(solvedTaskId)) {
-                // Добавляем новое решенное задание
                 currentSolved.add(solvedTaskId)
                 
-                // Получаем общее количество заданий для данного типа
                 val totalTasksCount = getTotalTasksCount(taskGroupId)
                 Log.d(TAG, "Общее количество заданий для группы $taskGroupId: $totalTasksCount")
                 
-                // Рассчитываем процент выполнения на основе количества решенных заданий
                 val newPercentage = calculatePercentage(currentSolved.size, totalTasksCount)
                 val newLastAccessed = System.currentTimeMillis()
                 val newSolvedTaskIds = ProgressEntity.listToJsonString(currentSolved)
                 
-                // Обновляем существующую сущность вместо создания новой
                 progressEntity.setPercentage(newPercentage)
                 progressEntity.setLastAccessed(newLastAccessed)
                 progressEntity.setCompleted(newPercentage >= 100)
                 progressEntity.setSolvedTaskIds(newSolvedTaskIds)
                 
-                // Сохраняем в локальную БД (обновляем, так как сущность уже существует или только что создана)
                 progressDao.update(progressEntity)
                 
-                // Добавляем в очередь синхронизации
                 queueProgressUpdate(progressEntity, syncImmediately)
                 
                 Log.d(TAG, "Добавлено решенное задание $solvedTaskId в группу $taskGroupId. Текущий прогресс: $newPercentage%")
@@ -833,15 +828,12 @@ class ProgressSyncRepository @Inject constructor(
      */
     private fun getTotalTasksCount(taskGroupId: String): Int {
         try {
-            // Получаем информацию о контенте из базы данных
-            val contentEntity = AppDatabase.getInstance(context).contentDao().getContentByIdSync(taskGroupId)
+            val contentEntity = contentDao.getContentByIdSync(taskGroupId)
             
             if (contentEntity != null && contentEntity.description != null) {
-                // Извлекаем количество заданий из описания
                 val description = contentEntity.description
                 Log.d(TAG, "Описание для $taskGroupId: $description")
                 
-                // Паттерн для поиска числа перед словом "заданий" или "задание" или "задания"
                 val pattern = java.util.regex.Pattern.compile("(\\d+)\\s+(заданий|задание|задания)")
                 val matcher = pattern.matcher(description)
                 
@@ -852,7 +844,6 @@ class ProgressSyncRepository @Inject constructor(
                     return count
                 }
                 
-                // Альтернативный подход - искать просто числа в описании
                 val numberPattern = java.util.regex.Pattern.compile("(\\d+)")
                 val numberMatcher = numberPattern.matcher(description)
                 
@@ -864,17 +855,15 @@ class ProgressSyncRepository @Inject constructor(
                 }
             }
             
-            // Если не удалось получить данные из базы или распарсить описание,
-            // используем предопределенные значения как запасной вариант
             Log.d(TAG, "Используем предопределенные значения для $taskGroupId")
             val groupNumber = taskGroupId.replace("task_group_", "").toIntOrNull() ?: 0
             
             return when (groupNumber) {
-                1 -> 10  // Предположим, что в задании 1 - 10 подзаданий
-                2 -> 8   // В задании 2 - 8 подзаданий
-                3 -> 15  // и т.д.
+                1 -> 10
+                2 -> 8
+                3 -> 15
                 4 -> 12
-                5 -> 99  // В задании 5 - 99 подзаданий
+                5 -> 99
                 6 -> 8
                 7 -> 10
                 8 -> 12
@@ -896,12 +885,12 @@ class ProgressSyncRepository @Inject constructor(
                 24 -> 10
                 25 -> 10
                 26 -> 12
-                27 -> 1   // Последнее задание (сочинение) обычно одно
-                else -> 10 // По умолчанию предполагаем 10 заданий
+                27 -> 1
+                else -> 10
             }
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка при получении количества заданий для $taskGroupId", e)
-            return 10 // Значение по умолчанию в случае ошибки
+            return 10
         }
     }
     
@@ -920,7 +909,6 @@ class ProgressSyncRepository @Inject constructor(
      * Преобразует сущность прогресса в DTO для обновления на сервере
      */
     private fun toProgressUpdateDto(progressEntity: ProgressEntity): ProgressUpdateRequest {
-        // Преобразуем JSON-строку с решенными заданиями в список
         val solvedTaskIds = progressEntity.getSolvedTaskIdsList().takeIf { it.isNotEmpty() }
         
         return ProgressUpdateRequest(
@@ -940,12 +928,10 @@ class ProgressSyncRepository @Inject constructor(
     fun getSolvedTaskIdsForEgeCategory(categoryId: String): kotlinx.coroutines.flow.Flow<List<String>> {
         val contentId = "task_group_$categoryId"
 
-        // Используем asFlow() для преобразования LiveData<ProgressEntity> в Flow<ProgressEntity?>
         return progressDao.getProgressByContentId(contentId).asFlow()
-            .map { entity: ProgressEntity? -> // Явно указываем тип entity как ProgressEntity?
+            .map { entity: ProgressEntity? ->
                 if (entity != null && !entity.getSolvedTaskIds().isNullOrEmpty()) {
                     try {
-                        // parseJsonSolvedTaskIds может вернуть null, поэтому обеспечиваем возврат emptyList() в этом случае
                         parseJsonSolvedTaskIds(entity.getSolvedTaskIds()) ?: emptyList<String>()
                     } catch (e: org.json.JSONException) {
                         Log.e(TAG, "Ошибка JSON парсинга solvedTaskIds для contentId $contentId: ${entity.getSolvedTaskIds()}", e)
@@ -958,5 +944,65 @@ class ProgressSyncRepository @Inject constructor(
                     emptyList<String>()
                 }
             }
+    }
+
+    private suspend fun syncStatisticsWithServer() {
+        val lastStatsTimestamp = getLastStatsSyncTimestamp()
+        Log.d(TAG, "🕒 Запрашиваем синхронизацию статистики с timestamp: $lastStatsTimestamp")
+
+        try {
+            val result = practiceSyncRepository.performFullSync(lastStatsTimestamp)
+
+            if (result is Result.Success) {
+                val syncResponse = result.data
+                Log.d(TAG, "✅ Успешно получено ${syncResponse.statistics.size} записей статистики с сервера")
+                
+                val maxTimestamp = syncResponse.lastSyncTimestamp
+                saveLastStatsSyncTimestamp(maxTimestamp)
+                Log.d(TAG, "🕒 Сохранена новая метка времени синхронизации статистики: $maxTimestamp")
+            } else if (result is Result.Failure) {
+                Log.e(TAG, "🚫 Ошибка при запросе статистики: ${result.exception.message}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "🚫 Ошибка сети при синхронизации статистики", e)
+        }
+    }
+
+    suspend fun queueStatisticsUpdate(statistics: PracticeStatisticsEntity, syncImmediately: Boolean = false): Long = withContext(Dispatchers.IO) {
+        val timestamp = System.currentTimeMillis()
+        val userId = userDao.getFirstUser()?.getUserId() ?: -1L
+
+        if (userId == -1L) {
+            Log.e(TAG, "Не удалось получить пользователя для добавления статистики в очередь")
+            return@withContext -1L
+        }
+
+        Log.d(TAG, "🔄 Добавление статистики в очередь синхронизации: itemId=${statistics.egeNumber}")
+
+        val syncQueueEntity = ProgressSyncQueueEntity(
+            statistics.egeNumber,
+            ProgressSyncQueueEntity.ITEM_TYPE_STATISTICS,
+            0,
+            false,
+            timestamp,
+            userId,
+            SyncStatus.PENDING,
+            "[]"
+        )
+
+        val existingItem = progressSyncQueueDao.getItemByItemId(statistics.egeNumber)
+        if (existingItem != null) {
+            syncQueueEntity.setId(existingItem.id)
+            Log.d(TAG, "🔄 Обновляем существующую запись статистики в очереди: itemId=${statistics.egeNumber}, id=${existingItem.id}")
+        }
+
+        val id = progressSyncQueueDao.insert(syncQueueEntity)
+        Log.d(TAG, "🔄 Добавлена статистика в очередь: itemId=${statistics.egeNumber}, id=$id")
+
+        if (syncImmediately) {
+            syncNow(true)
+        }
+
+        return@withContext id
     }
 } 

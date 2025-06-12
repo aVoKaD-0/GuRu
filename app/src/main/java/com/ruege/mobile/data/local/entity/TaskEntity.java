@@ -6,6 +6,8 @@ import androidx.room.PrimaryKey;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.jetbrains.annotations.NotNull;
+
 @Entity(tableName = "tasks")
 public class TaskEntity {
 

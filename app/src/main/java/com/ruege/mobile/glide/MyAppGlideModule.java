@@ -31,7 +31,6 @@ public class MyAppGlideModule extends AppGlideModule {
                 EntryPointAccessors.fromApplication(context, OkHttpClientEntryPoint.class);
         OkHttpClient okHttpClient = entryPoint.getOkHttpClient();
 
-        // Log the OkHttpClient instance
         Log.d("MyAppGlideModule", "Using OkHttpClient for Glide: " + okHttpClient);
         if (okHttpClient != null) {
             Log.d("MyAppGlideModule", "OkHttpClient interceptors: " + okHttpClient.interceptors());

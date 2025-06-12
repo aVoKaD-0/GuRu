@@ -12,7 +12,7 @@
         android:textAppearance="?attr/textAppearanceHeadline6"
         android:layout_marginBottom="12dp"
         android:text="Заголовок теории" />
-    
+
     <ProgressBar
         android:id="@+id/theory_bottom_sheet_progress"
         style="?android:attr/progressBarStyleHorizontal"

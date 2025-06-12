@@ -4,6 +4,7 @@ import androidx.room.Dao;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
+import androidx.room.Transaction;
 import com.ruege.mobile.data.local.entity.NewsEntity;
 import java.util.List;
 
@@ -23,6 +24,4 @@ public interface NewsDao {
     @Query("DELETE FROM news")
     void deleteAll(); 
 
-    
-    
 } 

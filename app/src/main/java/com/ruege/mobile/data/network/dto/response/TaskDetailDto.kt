@@ -16,12 +16,12 @@ data class TaskDetailDto(
     @Json(name = "explanation") val explanation: String?,
     @Json(name = "source") val source: String?,
     @Json(name = "text_id") val textId: Int?,
-    @Json(name = "text") val text: TextDto?
+    @Json(name = "text") val text: TextDataDto?
 ) {
     val taskId: String get() = id.toString()
     val title: String get() = "Задание $egeNumber" 
     val description: String get() = if (text != null) "Прочитайте текст и выполните задание" else ""
-    val content: String get() = if (text != null) "<div class='task-text'>${text.content}</div><div class='task-question'>$taskText</div>" else taskText
+    val content: String get() = if (text != null && text.content != null) "<div class='task-text'>${text.content}</div><div class='task-question'>$taskText</div>" else taskText
     val answerType: String get() = "TEXT"
     val maxPoints: Int get() = 10
     val timeLimit: Int get() = 60
@@ -45,12 +45,6 @@ data class TaskDetailDto(
 /**
  * DTO для текстового содержимого задания.
  */
-@JsonClass(generateAdapter = true)
-data class TextDto(
-    @Json(name = "id") val id: Int,
-    @Json(name = "content") val content: String,
-    @Json(name = "author") val author: String?
-)
 
 /**
  * DTO для вариантов решения задания.

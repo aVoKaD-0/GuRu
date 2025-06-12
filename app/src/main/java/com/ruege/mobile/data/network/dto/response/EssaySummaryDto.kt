@@ -10,17 +10,17 @@ import android.util.Log
  */
 @JsonClass(generateAdapter = true)
 data class EssaySummaryDto(
-    @Json(name = "id") val id: Int, // ID из БД
-    @Json(name = "ege_number") val egeNumber: Int, // Может быть нерелевантно для сочинений, но оставим для унификации
+    @Json(name = "id") val id: Int,
+    @Json(name = "ege_number") val egeNumber: Int,
     @Json(name = "title") val title: String,
     @Json(name = "type") val type: String? = null,
     @Json(name = "content_id") val contentId: String? = null
 ) {
     fun toContentEntity(): ContentEntity {
         try {
-            val safeType = type?.takeIf { it.isNotBlank() } ?: "essay" // Тип "essay"
+            val safeType = type?.takeIf { it.isNotBlank() } ?: "essay"
             val safeContentId = contentId?.takeIf { it.isNotBlank() } ?: id.toString()
-            val safeTitle = title.takeIf { it.isNotBlank() } ?: "Сочинение $id" // Обновленный заголовок
+            val safeTitle = title.takeIf { it.isNotBlank() } ?: "Сочинение $id" 
 
             Log.d("EssaySummaryDto", "Converting to ContentEntity: id=$id, ege=$egeNumber, " +
                 "type=${type ?: "NULL"} -> $safeType, contentId=${contentId ?: "NULL"} -> $safeContentId")
@@ -28,13 +28,13 @@ data class EssaySummaryDto(
             val entity = ContentEntity(
                 safeContentId,
                 safeTitle,
-                null, // description - пока нет
+                null, 
                 safeType,
-                null, // parentId - пока нет
-                false, // isDownloaded
-                false, // isNew
-                id, // orderPosition - используем id для порядка, если egeNumber не подходит
-                null // contentUrl - пока нет
+                null, 
+                false,
+                false,
+                id, 
+                null 
             )
 
             Log.d("EssaySummaryDto", "Created ContentEntity - contentId: ${entity.contentId}, " +

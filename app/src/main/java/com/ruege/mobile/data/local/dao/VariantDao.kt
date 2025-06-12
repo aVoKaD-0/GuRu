@@ -26,6 +26,9 @@ interface VariantDao {
     @Query("SELECT * FROM variants WHERE variant_id = :variantId")
     fun getVariantByIdFlow(variantId: Int): Flow<VariantEntity?>
 
+    @Query("SELECT variant_id FROM variants WHERE is_downloaded = 1")
+    fun getAllDownloadedVariantIds(): Flow<List<Int>>
+
     @Update
     suspend fun updateVariant(variant: VariantEntity)
 
@@ -34,6 +37,9 @@ interface VariantDao {
 
     @Query("UPDATE variants SET last_accessed_at = :timestamp WHERE variant_id = :variantId")
     suspend fun updateLastAccessedTimestamp(variantId: Int, timestamp: String)
+
+    @Query("UPDATE variants SET remaining_time_millis = :timeInMillis WHERE variant_id = :variantId")
+    suspend fun updateRemainingTime(variantId: Int, timeInMillis: Long)
     
     @Query("UPDATE variants SET is_downloaded = :isDownloaded WHERE variant_id = :variantId")
     suspend fun updateDownloadStatus(variantId: Int, isDownloaded: Boolean)

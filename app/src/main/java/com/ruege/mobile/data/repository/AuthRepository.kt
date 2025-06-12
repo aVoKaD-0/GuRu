@@ -9,7 +9,7 @@ import com.ruege.mobile.data.network.dto.request.LogoutRequestDto
 import com.ruege.mobile.data.network.dto.request.RefreshTokenRequestDto
 import com.ruege.mobile.data.network.dto.response.AuthResponseDto
 import com.ruege.mobile.data.network.dto.response.TokenDto
-import com.ruege.mobile.utils.Resource
+import com.ruege.mobile.utilss.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.OffsetDateTime
@@ -36,7 +36,6 @@ class AuthRepository @Inject constructor(
     suspend fun loginWithGoogle(googleIdToken: String): Resource<AuthResponseDto> {
         return withContext(Dispatchers.IO) {
             try {
-                // Дополнительное логирование для проверки формата токена
                 val segments = googleIdToken.split(".")
                 Log.d(TAG, "Google ID Token debug: Количество сегментов: ${segments.size}")
                 Log.d(TAG, "Google ID Token debug: Начало: ${googleIdToken.take(20)}...")
@@ -50,33 +49,24 @@ class AuthRepository @Inject constructor(
                 if (response.isSuccessful) {
                     response.body()?.let { authResponseDto ->
                         Log.d(TAG, "Google login успешен. Access token: ${authResponseDto.accessToken.take(10)}..., User: ${authResponseDto.user.username}")
-                        
-                        // Сохраняем пользователя в БД
                         try {
                             val userDto = authResponseDto.user
                             val userEntity = UserEntity(
-                                // userId устанавливается из DTO, т.к. он приходит с бэка
-                                // createdAt и lastLogin требуют преобразования из String в Long (timestamp)
+                                userDto.userId.toLong(),
+                                userDto.username ?: "",
+                                userDto.email ?: "",
+                                userDto.avatarUrl ?: "",
+                                parseDateStringToTimestamp(userDto.createdAt, System.currentTimeMillis()),
+                                parseDateStringToTimestamp(userDto.lastLogin, System.currentTimeMillis()),
+                                userDto.googleId ?: "" 
                             )
-                            userEntity.setUserId(userDto.userId.toLong())
-                            userEntity.setUsername(userDto.username ?: "")
-                            userEntity.setEmail(userDto.email ?: "")
-                            userEntity.setAvatarUrl(userDto.avatarUrl ?: "")
-                            userEntity.setCreatedAt(parseDateStringToTimestamp(userDto.createdAt, System.currentTimeMillis())) // Fallback to current time if parsing fails for createdAt
-                            userEntity.setLastLogin(parseDateStringToTimestamp(userDto.lastLogin, System.currentTimeMillis()))    // Fallback to current time for lastLogin
-                            // Устанавливаем googleId в пустую строку, так как это поле не может быть null
-                            userEntity.setGoogleId(userDto.googleId ?: "")
-
                             userDao.insert(userEntity)
-                            Log.d(TAG, "Пользователь ${userEntity.getUsername()} (ID: ${userEntity.getUserId()}) сохранен/обновлен в БД.")
-
+                            Log.d(TAG, "Пользователь ${userEntity.username} (ID: ${userEntity.userId}) сохранен/обновлен в БД.")
+                            Resource.Success(authResponseDto)
                         } catch (e: Exception) {
                             Log.e(TAG, "Ошибка при сохранении пользователя в БД: ${e.message}", e)
-                            // Решаем, должна ли эта ошибка приводить к Resource.Error для всего логина
-                            // Пока что логируем и продолжаем, возвращая токены и данные пользователя
+                            Resource.Error("Ошибка сохранения данных пользователя локально: ${e.message}", null)
                         }
-                        
-                        Resource.Success(authResponseDto)
                     } ?: run {
                         Log.e(TAG, "Google login: тело ответа пусто при успешном коде ${response.code()}")
                         Resource.Error("Ответ сервера пуст", null)
@@ -99,15 +89,13 @@ class AuthRepository @Inject constructor(
             return defaultTimestamp
         }
         return try {
-            // Пример формата от сервера: "2025-04-29 14:31:19.043744+00"
-            // Заменяем пробел на 'T' для соответствия ISO_OFFSET_DATE_TIME
             val cleanedDateString = dateString.replace(" ", "T")
             OffsetDateTime.parse(cleanedDateString, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
                 .toInstant()
                 .toEpochMilli()
         } catch (e: DateTimeParseException) {
             Log.e(TAG, "Ошибка парсинга строки даты '$dateString': ${e.message}", e)
-            defaultTimestamp // Возвращаем значение по умолчанию при ошибке
+            defaultTimestamp 
         } catch (e: Exception) {
             Log.e(TAG, "Неожиданная ошибка при парсинге даты '$dateString': ${e.message}", e)
             defaultTimestamp
@@ -166,13 +154,10 @@ class AuthRepository @Inject constructor(
                 } else {
                     val errorBody = response.errorBody()?.string() ?: "Нет деталей ошибки"
                     Log.e(TAG, "Выход из аккаунта неудачен. Код: ${response.code()}, Ошибка: $errorBody")
-                    // Будем возвращать успех даже при ошибке на сервере, так как локально мы все равно должны очистить данные
-                    // Это поведение можно изменить, если требуется строгая синхронизация с сервером
                     Resource.Success(true) 
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Исключение при выходе из аккаунта: ${e.javaClass.simpleName} - ${e.message}", e)
-                // Также возвращаем успех при ошибках сети, чтобы пользователь мог выйти даже без интернета
                 Resource.Success(true)
             }
         }

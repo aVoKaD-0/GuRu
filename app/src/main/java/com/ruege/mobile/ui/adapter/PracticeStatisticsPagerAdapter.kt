@@ -12,8 +12,8 @@ class PracticeStatisticsPagerAdapter(fragment: PracticeStatisticsBottomSheetDial
 
     override fun createFragment(position: Int): Fragment {
         return when (position) {
-            0 -> StatisticsByNumberFragment() // Фрагмент для статистики по номерам
-            1 -> RecentAttemptsFragment()   // Фрагмент для последних попыток
+            0 -> StatisticsByNumberFragment()
+            1 -> RecentAttemptsFragment()   
             else -> throw IllegalStateException("Invalid position for ViewPager: $position")
         }
     }

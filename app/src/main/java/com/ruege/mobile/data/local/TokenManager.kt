@@ -44,9 +44,7 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
         )
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256) // AES-256
-            // .setUserAuthenticationRequired(true) // Можно добавить, если нужна аутентификация пользователя для доступа к ключу
-            // .setUserAuthenticationValidityDurationSeconds(..)
+            .setKeySize(256)
             .build()
         keyGenerator.init(spec)
         return keyGenerator.generateKey()
@@ -57,12 +55,10 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             val secretKey = getSecretKey()
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            val iv = cipher.iv // Получаем IV после инициализации шифра
+            val iv = cipher.iv
             val encryptedBytes = cipher.doFinal(data.toByteArray(StandardCharsets.UTF_8))
-            // Сохраняем IV и зашифрованные данные в Base64
             Pair(Base64.encodeToString(iv, Base64.DEFAULT), Base64.encodeToString(encryptedBytes, Base64.DEFAULT))
         } catch (e: Exception) {
-            // Добавляем подробное логирование ошибки шифрования
             android.util.Log.e(TAG, "Ошибка шифрования: ${e.javaClass.simpleName} - ${e.message}", e)
             null
         }
@@ -73,13 +69,12 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             val secretKey = getSecretKey()
             val cipher = Cipher.getInstance(TRANSFORMATION)
             val iv = Base64.decode(ivString, Base64.DEFAULT)
-            val gcmSpec = GCMParameterSpec(128, iv) // 128 бит - стандартный размер тега аутентификации для GCM
+            val gcmSpec = GCMParameterSpec(128, iv)
             cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
             val encryptedBytes = Base64.decode(encryptedData, Base64.DEFAULT)
             val decryptedBytes = cipher.doFinal(encryptedBytes)
             String(decryptedBytes, StandardCharsets.UTF_8)
         } catch (e: Exception) {
-            // Добавляем подробное логирование ошибки дешифрования
             android.util.Log.e(TAG, "Ошибка дешифрования: ${e.javaClass.simpleName} - ${e.message}", e)
             null
         }
@@ -114,7 +109,12 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
         
         val token = decrypt(encryptedToken, iv)
         if (token == null) {
-            android.util.Log.e(TAG, "Не удалось расшифровать access token")
+            android.util.Log.e(TAG, "Не удалось расшифровать access token. Удаляем старые данные токена.")
+            sharedPreferences.edit {
+                remove(KEY_ACCESS_TOKEN)
+                remove(KEY_ACCESS_TOKEN_IV)
+                remove(KEY_ACCESS_TOKEN_EXPIRES_AT)
+            }
         } else {
             android.util.Log.d(TAG, "Access token успешно получен (длина: ${token.length})")
         }
@@ -150,7 +150,12 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
         
         val token = decrypt(encryptedToken, iv)
         if (token == null) {
-            android.util.Log.e(TAG, "Не удалось расшифровать refresh token")
+            android.util.Log.e(TAG, "Не удалось расшифровать refresh token. Удаляем старый refresh token.")
+
+            sharedPreferences.edit {
+                remove(KEY_REFRESH_TOKEN)
+                remove(KEY_REFRESH_TOKEN_IV)
+            }
         } else {
             android.util.Log.d(TAG, "Refresh token успешно получен (длина: ${token.length})")
         }
@@ -166,14 +171,13 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             remove(KEY_ACCESS_TOKEN_IV)
             remove(KEY_REFRESH_TOKEN)
             remove(KEY_REFRESH_TOKEN_IV)
-            // Можно также удалить сам ключ из Keystore, если он больше не нужен
-            // try { keyStore.deleteEntry(KEY_ALIAS) } catch (e: Exception) { e.printStackTrace() }
+            remove(KEY_ACCESS_TOKEN_EXPIRES_AT) 
         }
     }
 
     companion object {
         private const val TAG = "TokenManager"
-        private const val PREFS_NAME = "auth_prefs_v2" // Изменил имя, чтобы избежать конфликтов со старыми данными
+        private const val PREFS_NAME = "auth_prefs_v2" 
         private const val KEY_ACCESS_TOKEN = "access_token_encrypted"
         private const val KEY_ACCESS_TOKEN_IV = "access_token_iv"
         private const val KEY_REFRESH_TOKEN = "refresh_token_encrypted"
@@ -204,7 +208,6 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
      */
     fun isAccessTokenExpired(bufferSeconds: Int = 60): Boolean {
         val expiresAt = sharedPreferences.getLong(KEY_ACCESS_TOKEN_EXPIRES_AT, 0)
-        // Если время истечения не сохранено, считаем токен истекшим
         if (expiresAt == 0L) return true
         
         val currentTime = System.currentTimeMillis()

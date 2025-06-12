@@ -9,7 +9,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.ruege.mobile.R
-import com.ruege.mobile.viewmodel.PracticeAttemptWithTask
+import com.ruege.mobile.ui.viewmodel.PracticeAttemptWithTask
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -51,7 +51,6 @@ class AttemptsAdapter(
             }
             tvAttemptDate.text = attemptDate
             
-            // Устанавливаем иконку результата
             val iconResId = if (attemptWithTask.isCorrect) {
                 android.R.drawable.ic_menu_send
             } else {
@@ -59,7 +58,6 @@ class AttemptsAdapter(
             }
             ivResult.setImageResource(iconResId)
             
-            // Устанавливаем цвет иконки в зависимости от результата
             val colorResId = if (attemptWithTask.isCorrect) {
                 android.R.color.holo_green_dark
             } else {
@@ -67,10 +65,8 @@ class AttemptsAdapter(
             }
             ivResult.setColorFilter(itemView.context.getColor(colorResId))
             
-            // Отображаем краткий текст задания
             tvTaskText.text = attemptWithTask.taskEntity.taskText ?: "Нет текста задания"
             
-            // Обработчик нажатия на кнопку "Попробовать снова"
             tvTryAgain.setOnClickListener {
                 onTryAgainClick(attemptWithTask)
             }

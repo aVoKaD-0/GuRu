@@ -30,16 +30,16 @@ class RecentAttemptsAdapter : ListAdapter<PracticeAttemptItemUiModel, RecentAtte
     class ViewHolder(private val binding: ItemRecentAttemptBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(item: PracticeAttemptItemUiModel, dateFormat: SimpleDateFormat) {
             binding.tvAttemptTaskTitle.text = item.egeTaskNumberDisplay
-            binding.tvAttemptDate.text = item.attemptDateFormatted // Уже отформатирована во ViewModel
+            binding.tvAttemptDate.text = item.attemptDateFormatted 
 
             if (item.isCorrect) {
                 binding.tvAttemptResult.text = itemView.context.getString(R.string.correct)
-                binding.tvAttemptResult.setTextColor(ContextCompat.getColor(itemView.context, R.color.md_theme_light_tertiary)) // Пример цвета
-                binding.ivStatusIndicator.setImageResource(R.drawable.ic_circle_check_green) // Убедитесь, что эта иконка есть
+                binding.tvAttemptResult.setTextColor(ContextCompat.getColor(itemView.context, R.color.md_theme_light_tertiary))
+                binding.ivStatusIndicator.setImageResource(R.drawable.ic_circle_check_green)
             } else {
                 binding.tvAttemptResult.text = itemView.context.getString(R.string.incorrect)
-                binding.tvAttemptResult.setTextColor(ContextCompat.getColor(itemView.context, R.color.md_theme_light_error)) // Пример цвета
-                binding.ivStatusIndicator.setImageResource(R.drawable.ic_circle_cross_red) // Убедитесь, что эта иконка есть
+                binding.tvAttemptResult.setTextColor(ContextCompat.getColor(itemView.context, R.color.md_theme_light_error)) 
+                binding.ivStatusIndicator.setImageResource(R.drawable.ic_circle_cross_red)
             }
         }
     }

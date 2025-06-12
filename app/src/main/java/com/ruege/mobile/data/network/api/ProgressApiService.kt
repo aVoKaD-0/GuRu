@@ -2,6 +2,7 @@ package com.ruege.mobile.data.network.api
 
 import com.ruege.mobile.data.network.dto.ProgressSyncResponse
 import com.ruege.mobile.data.network.dto.ProgressUpdateRequest
+import com.ruege.mobile.data.network.dto.request.PracticeStatisticSyncDto
 import com.ruege.mobile.data.network.dto.response.ProgressSyncItemDto
 import retrofit2.Response
 import retrofit2.http.Body

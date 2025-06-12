@@ -13,22 +13,27 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.ruege.mobile.data.local.dao.PracticeStatisticsDao
+import com.ruege.mobile.data.local.dao.ProgressDao
+import com.ruege.mobile.data.local.dao.ProgressSyncQueueDao
+import com.ruege.mobile.data.local.dao.UserDao
 import com.ruege.mobile.data.local.entity.ProgressSyncQueueEntity
 import com.ruege.mobile.data.local.entity.SyncStatus
+import com.ruege.mobile.data.mapper.toProgressUpdateDto
+import com.ruege.mobile.data.network.api.PracticeApiService
 import com.ruege.mobile.data.network.api.ProgressApiService
-import com.ruege.mobile.data.local.dao.ProgressSyncQueueDao
 import com.ruege.mobile.data.network.dto.ProgressUpdateRequest
-import com.ruege.mobile.util.NetworkUtils
+import com.ruege.mobile.data.network.dto.request.PracticeStatisticSyncDto
+import com.ruege.mobile.data.network.dto.request.PracticeStatisticsBranchRequest
+import com.ruege.mobile.data.repository.PracticeSyncRepository
+import com.ruege.mobile.utils.NetworkUtils
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
-import com.ruege.mobile.data.mapper.toProgressUpdateDto as mapperToProgressUpdateDto
-import com.ruege.mobile.data.repository.PracticeSyncRepository
 
 /**
  * Фоновый работник для синхронизации прогресса пользователя с сервером
@@ -40,35 +45,38 @@ class ProgressSyncWorker : CoroutineWorker {
     interface ProgressSyncWorkerEntryPoint {
         fun progressSyncQueueDao(): ProgressSyncQueueDao
         fun progressApiService(): ProgressApiService
+        fun practiceApiService(): PracticeApiService
         fun practiceSyncRepository(): PracticeSyncRepository
     }
     
     @EntryPoint
     @InstallIn(SingletonComponent::class)
-    interface ProgressDaoEntryPoint {
-        fun progressDao(): com.ruege.mobile.data.local.dao.ProgressDao
+    interface DaoEntryPoint {
+        fun progressDao(): ProgressDao
+        fun practiceStatisticsDao(): PracticeStatisticsDao
+        fun userDao(): UserDao
     }
     
     private val progressSyncQueueDao: ProgressSyncQueueDao
     private val progressApiService: ProgressApiService
+    private val practiceApiService: PracticeApiService
     private val practiceSyncRepository: PracticeSyncRepository
     
-    // Основной конструктор для прямого создания с зависимостями из нашей фабрики
     constructor(
         appContext: Context,
         workerParams: WorkerParameters,
         progressSyncQueueDao: ProgressSyncQueueDao,
         progressApiService: ProgressApiService,
+        practiceApiService: PracticeApiService,
         practiceSyncRepository: PracticeSyncRepository
     ) : super(appContext, workerParams) {
         this.progressSyncQueueDao = progressSyncQueueDao
         this.progressApiService = progressApiService
+        this.practiceApiService = practiceApiService
         this.practiceSyncRepository = practiceSyncRepository
     }
     
-    // Вторичный конструктор для создания через WorkManager без фабрики
     constructor(appContext: Context, workerParams: WorkerParameters) : super(appContext, workerParams) {
-        // Получаем зависимости через EntryPoint
         val entryPoint = EntryPointAccessors.fromApplication(
             appContext,
             ProgressSyncWorkerEntryPoint::class.java
@@ -76,6 +84,7 @@ class ProgressSyncWorker : CoroutineWorker {
         
         this.progressSyncQueueDao = entryPoint.progressSyncQueueDao()
         this.progressApiService = entryPoint.progressApiService()
+        this.practiceApiService = entryPoint.practiceApiService()
         this.practiceSyncRepository = entryPoint.practiceSyncRepository()
     }
 
@@ -129,48 +138,40 @@ class ProgressSyncWorker : CoroutineWorker {
         fun startOneTimeSync(context: Context, expedited: Boolean = true, isExitSync: Boolean = false) {
             Log.d(TAG, "Запуск одноразовой синхронизации, expedited=$expedited, isExitSync=$isExitSync")
             
-            // Если это синхронизация при выходе из приложения, добавляем тег EXIT_SYNC
             val workTags = mutableSetOf(TAG)
             if (isExitSync) {
                 workTags.add(TAG_EXIT_SYNC)
             }
             
-            // Настраиваем ограничения для работы
             val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED) // Требуется подключение к сети
+                .setRequiredNetworkType(NetworkType.CONNECTED) 
                 .build()
             
-            // Создаем объект работы
             val workRequest = OneTimeWorkRequestBuilder<ProgressSyncWorker>()
                 .setConstraints(constraints)
                 .setBackoffCriteria(
-                    BackoffPolicy.LINEAR, // Линейная задержка для повторных попыток
-                    15, // Минимальное время задержки
-                    TimeUnit.SECONDS // Единица измерения времени
+                    BackoffPolicy.LINEAR, 
+                    15, 
+                    TimeUnit.SECONDS
                 )
                 .addTag(TAG)
                 .apply {
-                    // Добавляем теги
                     workTags.forEach { tag ->
                         addTag(tag)
                     }
                     
-                    // Если нужно экспедированное выполнение
                     if (expedited) {
                         setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     }
                 }
                 .build()
-            
-            // Отменяем все предыдущие работы с тем же тегом
             WorkManager.getInstance(context)
                 .cancelAllWorkByTag(TAG)
             
-            // Запускаем работу
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(
-                    "${TAG}_${System.currentTimeMillis()}", // Уникальное имя работы
-                    ExistingWorkPolicy.REPLACE, // Заменяем существующую работу
+                    "${TAG}_${System.currentTimeMillis()}", 
+                    ExistingWorkPolicy.REPLACE, 
                     workRequest
                 )
         }
@@ -181,10 +182,8 @@ class ProgressSyncWorker : CoroutineWorker {
          */
         @JvmStatic
         fun startExitSync(context: Context) {
-            // Используем новый метод с флагом isExitSync
             startOneTimeSync(context, true, true)
             
-            // Также выполняем прямую синхронизацию через репозиторий если возможно
             try {
                 Log.d(TAG, "Пытаемся получить ProgressSyncRepository для прямой синхронизации")
                 val appContext = context.applicationContext
@@ -217,7 +216,6 @@ class ProgressSyncWorker : CoroutineWorker {
         fun cancelSync(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_ONE_TIME)
-            // Не отменяем задачи EXIT-синхронизации, т.к. они критически важны
             Log.d(TAG, "Cancelled regular sync work (exit sync preserved)")
         }
     }
@@ -226,183 +224,178 @@ class ProgressSyncWorker : CoroutineWorker {
      * Выполняет фоновую работу по синхронизации прогресса
      */
     override suspend fun doWork(): Result {
-        // Определяем, является ли это синхронизацией при выходе из приложения
         val isExitSync = tags.contains(TAG_EXIT_SYNC)
         
         Log.d(TAG, "Starting sync work in ${applicationContext.packageName}, exit mode: $isExitSync")
         
         return try {
             withContext(Dispatchers.IO) {
-                // Проверяем, есть ли сеть (для не-exit-синхронизации это критично)
                 if (!NetworkUtils.isNetworkAvailable(applicationContext) && !isExitSync) {
                     Log.w(TAG, "No network connection. Rescheduling sync.")
                     return@withContext Result.retry()
                 }
                 
-                // Получаем все записи со статусом PENDING (не более 100 за раз)
-                val pendingItems = progressSyncQueueDao.getItemsByStatusSync(SyncStatus.PENDING.getValue(), 100)
-                
+                val statusesToSync = listOf(SyncStatus.PENDING.getValue(), SyncStatus.FAILED.getValue())
+                val pendingItems = progressSyncQueueDao.getItemsByStatusesSync(statusesToSync, 200)
+
                 if (pendingItems.isEmpty()) {
-                    Log.d(TAG, "No pending items to sync. Work completed.")
+                    Log.d(TAG, "No pending or failed items to sync. Work completed.")
                     return@withContext Result.success()
                 }
                 
-                Log.d(TAG, "Found ${pendingItems.size} pending items to sync")
+                Log.d(TAG, "Found ${pendingItems.size} pending or failed items to sync")
                 
-                // Создаем список запросов на обновление
-                val updateRequests = pendingItems.map { item ->
-                    // Получаем полную информацию о прогрессе из базы данных
-                    val progressEntity = try {
-                        val entryPoint = EntryPointAccessors.fromApplication(
-                            applicationContext,
-                            ProgressDaoEntryPoint::class.java
-                        )
-                        entryPoint.progressDao().getProgressByContentIdSync(item.contentId)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error getting full progress entity", e)
-                        null
-                    }
-                    
-                    // Если удалось получить полную информацию о прогрессе, используем ее
-                    if (progressEntity != null) {
-                        try {
-                            Log.d(TAG, "📱 Создаем запрос из progressEntity для ${item.contentId}, процент: ${progressEntity.getPercentage()}, выполнено: ${progressEntity.isCompleted()}")
-                            // Используем расширение для преобразования из Entity в DTO
-                            mapperToProgressUpdateDto(progressEntity)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error converting entity to DTO", e)
-                            // Фолбэк на простое преобразование
-                            Log.d(TAG, "📱 Фолбэк: создаем запрос из элемента очереди для ${item.contentId}, процент: ${item.percentage}, выполнено: ${item.isCompleted()}")
-                            ProgressUpdateRequest(
-                                contentId = item.contentId,
-                                percentage = item.percentage,
-                                completed = item.isCompleted(),
-                                timestamp = item.timestamp
-                            )
-                        }
-                    } else {
-                        // Создаем запрос только с основной информацией из очереди
-                        Log.d(TAG, "📱 Создаем запрос из элемента очереди для ${item.contentId}, процент: ${item.percentage}, выполнено: ${item.isCompleted()}")
-                        ProgressUpdateRequest(
-                            contentId = item.contentId,
-                            percentage = item.percentage,
-                            completed = item.isCompleted(),
-                            timestamp = item.timestamp
-                        )
-                    }
+                val progressItems = pendingItems.filter { it.itemType == ProgressSyncQueueEntity.ITEM_TYPE_PROGRESS }
+                val statisticsItems = pendingItems.filter { it.itemType == ProgressSyncQueueEntity.ITEM_TYPE_STATISTICS }
+                
+                var progressSyncSuccess = true
+                if (progressItems.isNotEmpty()) {
+                    progressSyncSuccess = syncProgressItems(progressItems, isExitSync)
                 }
                 
-                try {
-                    Log.d(TAG, "📱 Подготовлено ${updateRequests.size} запросов для отправки на сервер")
-                    updateRequests.forEach { request ->
-                        Log.d(TAG, "📱 Запрос: contentId=${request.contentId}, percentage=${request.percentage}, completed=${request.completed}")
-                    }
-                    
-                    // Проверяем подключение перед отправкой
-                    if (!NetworkUtils.isNetworkAvailable(applicationContext)) {
-                        Log.e(TAG, "📱 Нет подключения к сети. Отправка отложена.")
-                        if (!isExitSync) {
-                            return@withContext Result.retry()
-                        }
-                    }
-                    
-                    // Логируем информацию о API сервисе
-                    Log.d(TAG, "📱 API сервис: ${progressApiService.javaClass.name}")
-                    
-                    // Отправляем пакетный запрос
-                    Log.d(TAG, "📱 Отправляем запрос на эндпоинт /progress/batch")
-                    val response = progressApiService.updateProgressBatch(updateRequests)
-                    
-                    Log.d(TAG, "📱 Получен ответ от сервера: isSuccessful=${response.isSuccessful}, code=${response.code()}, message=${response.message()}")
-                    
-                    if (response.isSuccessful) {
-                        val responseList = response.body()
-                        
-                        if (responseList != null && responseList.isNotEmpty()) {
-                            Log.d(TAG, "📱 Получен ответ от сервера с ${responseList.size} элементами")
-                            // Выводим первые несколько ответов для отладки
-                            responseList.take(3).forEach { resp ->
-                                Log.d(TAG, "📱 Ответ: contentId=${resp.contentId}, success=${resp.success}, message=${resp.message}")
-                            }
-                            
-                            // Проходим по всем элементам и обновляем их статус на основе ответа сервера
-                            val itemsWithResponses = pendingItems.map { item ->
-                                // Находим соответствующий ответ по content_id
-                                val itemResponse = responseList.find { it.contentId == item.contentId }
-                                item to itemResponse
-                            }
-                            
-                            // Обновляем статус элементов
-                            for ((item, itemResponse) in itemsWithResponses) {
-                                if (itemResponse != null && itemResponse.success) {
-                                    item.syncStatus = SyncStatus.SYNCED
-                                    Log.d(TAG, "📱 Успешная синхронизация для ${item.contentId}")
-                                } else {
-                                    // Если не нашли ответ или он не успешен, элемент будет повторно синхронизирован
-                                    // в следующий раз
-                                    item.syncStatus = SyncStatus.FAILED
-                                    Log.d(TAG, "📱 Ошибка синхронизации для ${item.contentId}: ${itemResponse?.message ?: "нет ответа"}")
-                                }
-                                progressSyncQueueDao.update(item)
-                            }
-                            
-                            val successCount = itemsWithResponses.count { it.second?.success == true }
-                            Log.d(TAG, "📱 Batch-синхронизация основного прогресса завершена: $successCount успешных обновлений из ${pendingItems.size}")
-
-                            // ---> СИНХРОНИЗАЦИЯ СТАТИСТИКИ ПРАКТИКИ <--- (начало)
-                            Log.d(TAG, "Запуск синхронизации статистики практики...")
-                            try {
-                                val practiceSyncResult = practiceSyncRepository.performFullSync()
-                                if (practiceSyncResult is com.ruege.mobile.data.repository.Result.Success<*>) {
-                                    Log.d(TAG, "Синхронизация статистики практики успешно завершена.")
-                                } else if (practiceSyncResult is com.ruege.mobile.data.repository.Result.Failure) {
-                                    Log.e(TAG, "Ошибка при синхронизации статистики практики: ${practiceSyncResult.exception.message}")
-                                    // Не меняем общий результат worker'а, просто логируем ошибку
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Исключение во время синхронизации статистики практики", e)
-                                // Не меняем общий результат worker'а, просто логируем ошибку
-                            }
-                            // ---> СИНХРОНИЗАЦИЯ СТАТИСТИКИ ПРАКТИКИ <--- (конец)
-
-                        } else {
-                            Log.e(TAG, "Server returned empty response list for main progress")
-                            // Не обновляем статус записей, чтобы они были синхронизированы позже
-                            if (!isExitSync) {
-                                return@withContext Result.retry()
-                            }
-                        }
-                    } else {
-                        Log.e(TAG, "Batch sync failed: ${response.code()} ${response.message()}")
-                        
-                        // Помечаем записи как FAILED, если это критическая ошибка
-                        if (response.code() == 401 || response.code() == 403) {
-                            pendingItems.forEach { item ->
-                                item.syncStatus = SyncStatus.FAILED
-                                progressSyncQueueDao.update(item)
-                            }
-                        }
-                        
-                        // Для остальных ошибок просто возвращаем retry
-                        if (!isExitSync) {
-                            return@withContext Result.retry()
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error during batch sync", e)
-                    if (!isExitSync) {
-                        return@withContext Result.retry()
-                    }
+                var statisticsSyncSuccess = true
+                if (statisticsItems.isNotEmpty()) {
+                    statisticsSyncSuccess = syncStatisticsItems(statisticsItems, isExitSync)
                 }
-                
-                Log.d(TAG, "Sync work completed successfully (exit mode: $isExitSync)")
-                Result.success()
+
+                if (progressSyncSuccess && statisticsSyncSuccess) {
+                    Log.d(TAG, "Sync work completed successfully (exit mode: $isExitSync)")
+                    Result.success()
+                } else {
+                    if (isExitSync) Result.success() else Result.retry()
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error during sync work", e)
-            // Для синхронизации при выходе всегда возвращаем успех,
-            // чтобы система не пыталась перезапускать работу
             if (isExitSync) Result.success() else Result.failure()
+        }
+    }
+
+    private suspend fun syncProgressItems(items: List<ProgressSyncQueueEntity>, isExitSync: Boolean): Boolean {
+        Log.d(TAG, "Syncing ${items.size} progress items.")
+        val entryPoint = EntryPointAccessors.fromApplication(applicationContext, DaoEntryPoint::class.java)
+        val progressDao = entryPoint.progressDao()
+
+        val updateRequests = items.map { item ->
+            val progressEntity = try {
+                progressDao.getProgressByContentIdSync(item.itemId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting full progress entity for ${item.itemId}", e)
+                null
+            }
+
+            if (progressEntity != null) {
+                toProgressUpdateDto(progressEntity)
+            } else {
+                ProgressUpdateRequest(
+                    contentId = item.itemId,
+                    percentage = item.percentage,
+                    completed = item.isCompleted(),
+                    timestamp = item.timestamp
+                )
+            }
+        }
+
+        try {
+            val response = progressApiService.updateProgressBatch(updateRequests)
+            if (response.isSuccessful) {
+                val responseList = response.body() ?: emptyList()
+                val responseMap = responseList.associateBy { it.contentId }
+                items.forEach { item ->
+                    val itemResponse = responseMap[item.itemId]
+                    if (itemResponse?.success == true) {
+                        item.syncStatus = SyncStatus.SYNCED
+                        Log.d(TAG, "Successfully synced progress for ${item.itemId}")
+                    } else {
+                        item.syncStatus = SyncStatus.FAILED
+                        Log.w(TAG, "Failed to sync progress for ${item.itemId}: ${itemResponse?.message}")
+                    }
+                    progressSyncQueueDao.update(item)
+                }
+                return true
+            } else {
+                Log.e(TAG, "Progress batch sync failed: ${response.code()} ${response.message()}")
+                if (response.code() in 400..499) { 
+                    items.forEach {
+                        it.syncStatus = SyncStatus.FAILED
+                        progressSyncQueueDao.update(it)
+                    }
+                }
+                return false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during progress batch sync", e)
+            return false
+        }
+    }
+
+    private suspend fun syncStatisticsItems(items: List<ProgressSyncQueueEntity>, isExitSync: Boolean): Boolean {
+        Log.d(TAG, "Syncing ${items.size} statistics items.")
+        val entryPoint = EntryPointAccessors.fromApplication(applicationContext, DaoEntryPoint::class.java)
+        val statisticsDao = entryPoint.practiceStatisticsDao()
+        val userDao = entryPoint.userDao()
+
+        val updateRequests = items.mapNotNull { item ->
+            val statsEntity = try {
+                statisticsDao.getStatisticsByEgeNumberSync(item.itemId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting full statistics entity for ${item.itemId}", e)
+                null
+            }
+
+            statsEntity?.let {
+                PracticeStatisticSyncDto(
+                    egeNumber = it.egeNumber,
+                    totalAttempts = it.totalAttempts,
+                    correctAttempts = it.correctAttempts,
+                    lastAttemptDate = it.lastAttemptDate
+                )
+            }
+        }
+
+        if (updateRequests.isEmpty()) {
+            Log.w(TAG, "No valid statistics items to sync after fetching from DB.")
+            return true 
+        }
+
+        try {
+            val userId = userDao.getFirstUser()?.getUserId()?.toString()
+            if (userId == null) {
+                Log.e(TAG, "Worker: could not get user ID for statistics sync")
+                return false
+            }
+
+            val lastSyncTimestamp = 0L
+
+            val request = PracticeStatisticsBranchRequest(
+                userId = userId,
+                lastKnownServerSyncTimestamp = lastSyncTimestamp,
+                newOrUpdatedAggregatedStatistics = updateRequests,
+                newAttempts = emptyList() 
+            )
+            val response = practiceApiService.updatePracticeStatistics(request)
+
+            if (response.isSuccessful) {
+                val syncResponse = response.body()
+                items.forEach { item ->
+                    item.syncStatus = SyncStatus.SYNCED
+                    Log.d(TAG, "Successfully synced statistics for ${item.itemId}")
+                    progressSyncQueueDao.update(item)
+                }
+                return true
+            } else {
+                Log.e(TAG, "Statistics batch sync failed: ${response.code()} ${response.message()}")
+                if (response.code() in 400..499) {
+                    items.forEach {
+                        it.syncStatus = SyncStatus.FAILED
+                        progressSyncQueueDao.update(it)
+                    }
+                }
+                return false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during statistics batch sync", e)
+            return false
         }
     }
 } 

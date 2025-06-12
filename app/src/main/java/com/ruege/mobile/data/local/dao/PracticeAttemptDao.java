@@ -58,4 +58,10 @@ public interface PracticeAttemptDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM practice_attempts WHERE task_id = :taskId LIMIT 1)")
     boolean wasAttemptsForTask(int taskId);
+
+    @androidx.room.Transaction
+    default void clearAndInsertAll(List<PracticeAttemptEntity> attempts) {
+        clearAllAttempts();
+        insertAll(attempts);
+    }
 } 

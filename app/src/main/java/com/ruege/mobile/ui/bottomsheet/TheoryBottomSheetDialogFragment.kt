@@ -17,10 +17,14 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.ruege.mobile.R
 import com.ruege.mobile.data.network.dto.response.TheoryContentDto
-import com.ruege.mobile.ui.viewmodel.ContentViewModel
+import com.ruege.mobile.ui.viewmodel.TheoryViewModel
 import com.ruege.mobile.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import android.content.res.Configuration
+import android.widget.Button
+import android.widget.ImageView
+import com.ruege.mobile.utilss.Resource
+import android.widget.Toast
 
 private const val ARG_CONTENT_ID = "content_id"
 private const val ARG_TITLE = "title"
@@ -29,12 +33,14 @@ private const val TAG_THEORY_BS = "TheoryBottomSheet"
 @AndroidEntryPoint
 class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
-    private val contentViewModel: ContentViewModel by activityViewModels()
+    private val theoryViewModel: TheoryViewModel by activityViewModels()
 
     private var theoryTitleTextView: TextView? = null
     private var theoryWebView: WebView? = null
     private var theoryProgressBar: ProgressBar? = null
     private var theoryErrorTextView: TextView? = null
+    private var downloadButton: Button? = null
+    private var downloadStatusIcon: ImageView? = null
 
     private var contentId: String? = null
     private var theoryTitle: String? = null
@@ -68,33 +74,45 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
         setupWebView()
         observeTheoryContent()
         observeErrorMessages()
+        observeDownloadStatus()
+        observeDeleteStatus()
 
         contentId?.let {
             Log.d(TAG_THEORY_BS, "Загрузка теории для contentId: $it")
-            contentViewModel.loadTheoryContent(it)
+            theoryViewModel.loadTheoryContent(it)
+            theoryViewModel.getDownloadedTheory(it).observe(viewLifecycleOwner) { downloadedTheory ->
+                updateDownloadButton(downloadedTheory != null)
+            }
         } ?: run {
             Log.e(TAG_THEORY_BS, "contentId is null, не могу загрузить теорию")
             showError("ID контента не найден.")
+        }
+        
+        downloadButton?.setOnClickListener {
+            contentId?.let { id ->
+                if (theoryViewModel.isTheoryDownloaded(id)) {
+                    theoryViewModel.deleteDownloadedTheory(id)
+                } else {
+                    theoryViewModel.downloadTheory(id)
+                }
+            }
         }
     }
 
     private fun setupWebView() {
         theoryWebView?.settings?.apply {
-            javaScriptEnabled = true // Отключено по умолчанию для безопасности, но может понадобиться
-            // domStorageEnabled = true
-            // loadWithOverviewMode = true
-            // useWideViewPort = true
-            // builtInZoomControls = true
-            // displayZoomControls = false
+            javaScriptEnabled = true
         }
     }
 
     private fun observeTheoryContent() {
-        contentViewModel.theoryContent.observe(viewLifecycleOwner, Observer { theoryContentDto ->
+        theoryViewModel.theoryContent.observe(viewLifecycleOwner, Observer { theoryContentDto ->
             if (theoryContentDto != null && theoryContentDto.id.toString() == contentId) {
                 val htmlContent = theoryContentDto.content
                 if (!htmlContent.isNullOrEmpty()) {
-                    val styledHtml = (activity as? MainActivity)?.applyStylesToHtml(htmlContent, isDarkTheme())
+                    val mainActivity = activity as? MainActivity
+                    val currentDarkTheme = mainActivity?.isDarkThemeEnabled() ?: false
+                    val styledHtml = mainActivity?.applyStylesToHtml(htmlContent, currentDarkTheme)
                     theoryWebView?.loadDataWithBaseURL(null, styledHtml ?: htmlContent, "text/html", "UTF-8", null)
                     showContent()
                     Log.d(TAG_THEORY_BS, "Теория '${theoryTitle}' загружена.")
@@ -103,24 +121,56 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     Log.w(TAG_THEORY_BS, "Содержимое теории для '${theoryTitle}' пустое.")
                 }
             } else if (theoryContentDto == null && contentId != null) {
-                 // Возможно, данные еще не загружены или были очищены.
-                 // Если contentId есть, ViewModel должен был начать загрузку.
-                 // Можно добавить логику повторного запроса или просто ожидать.
                  Log.d(TAG_THEORY_BS, "theoryContentDto is null, ожидаем загрузки для $contentId")
             }
         })
     }
 
     private fun observeErrorMessages() {
-        contentViewModel.errorMessage.observe(viewLifecycleOwner, Observer { errorMessage ->
-            // Показываем ошибку только если она относится к текущему контенту
-            // (Нужен более точный механизм определения, к какому запросу относится ошибка)
-            // Пока что, если есть ошибка и контент не отображен, показываем ее.
+        theoryViewModel.errorMessage.observe(viewLifecycleOwner, Observer { errorMessage ->
             if (!errorMessage.isNullOrEmpty() && theoryWebView?.visibility != View.VISIBLE) {
                 showError(errorMessage)
                 Log.e(TAG_THEORY_BS, "Ошибка загрузки теории '${theoryTitle}': $errorMessage")
             }
         })
+    }
+
+    private fun observeDownloadStatus() {
+        theoryViewModel.downloadStatus.observe(viewLifecycleOwner) { resource ->
+            when(resource) {
+                is Resource.Loading -> {
+                    downloadButton?.isEnabled = false
+                    downloadButton?.text = "Загрузка..."
+                }
+                is Resource.Success -> {
+                    downloadButton?.isEnabled = true
+                    Toast.makeText(requireContext(), "Теория успешно скачана", Toast.LENGTH_SHORT).show()
+                }
+                is Resource.Error -> {
+                    downloadButton?.isEnabled = true
+                    Toast.makeText(requireContext(), "Ошибка скачивания: ${resource.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun observeDeleteStatus() {
+        theoryViewModel.deleteStatus.observe(viewLifecycleOwner) { resource ->
+            when(resource) {
+                is Resource.Loading -> {
+                    downloadButton?.isEnabled = false
+                    downloadButton?.text = "Удаление..."
+                }
+                is Resource.Success -> {
+                    downloadButton?.isEnabled = true
+                    Toast.makeText(requireContext(), "Теория удалена", Toast.LENGTH_SHORT).show()
+                }
+                is Resource.Error -> {
+                    downloadButton?.isEnabled = true
+                    Toast.makeText(requireContext(), "Ошибка удаления: ${resource.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     private fun showLoading() {
@@ -141,16 +191,21 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
         theoryErrorTextView?.text = message
         theoryErrorTextView?.visibility = View.VISIBLE
     }
-    
-    private fun isDarkTheme(): Boolean {
-        // Предполагаем, что MainActivity имеет метод для проверки темы
-        return (activity as? MainActivity)?.isDarkTheme() ?: false
+
+    private fun updateDownloadButton(isDownloaded: Boolean) {
+        if (isDownloaded) {
+            downloadButton?.text = "Удалить"
+            downloadStatusIcon?.visibility = View.VISIBLE
+            downloadStatusIcon?.setImageResource(R.drawable.ic_download_done)
+        } else {
+            downloadButton?.text = "Скачать"
+            downloadStatusIcon?.visibility = View.GONE
+        }
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialog = super.onCreateDialog(savedInstanceState) as BottomSheetDialog
 
-        // Логирование текущей темы
         val currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         when (currentNightMode) {
             Configuration.UI_MODE_NIGHT_NO -> Log.d(TAG_THEORY_BS, "onCreateDialog: Current theme is Light.")
@@ -167,10 +222,10 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 val layoutParams = bottomSheet.layoutParams
 
                 val windowHeight = getWindowHeight()
-                layoutParams.height = windowHeight // Заполняем на всю высоту
+                layoutParams.height = windowHeight 
                 bottomSheet.layoutParams = layoutParams
                 
-                behavior.peekHeight = (windowHeight * 0.95).toInt() // Высота в свернутом состоянии
+                behavior.peekHeight = (windowHeight * 0.95).toInt() 
                 behavior.state = BottomSheetBehavior.STATE_EXPANDED
                 behavior.isFitToContents = false 
                 behavior.skipCollapsed = true

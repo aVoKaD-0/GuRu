@@ -100,4 +100,6 @@
     <color name="md_theme_light_tertiary">#6200EE</color> 
     <color name="md_theme_light_error">#B00020</color>
 
+    <color name="success_green">#4CAF50</color>
+
 </resources>

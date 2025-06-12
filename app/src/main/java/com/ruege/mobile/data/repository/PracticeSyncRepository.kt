@@ -7,8 +7,9 @@ import com.ruege.mobile.data.local.entity.PracticeStatisticsEntity
 import com.ruege.mobile.data.network.api.PracticeApiService
 import com.ruege.mobile.data.network.dto.request.PracticeAttemptSyncDto
 import com.ruege.mobile.data.network.dto.request.PracticeStatisticSyncDto
-import com.ruege.mobile.data.network.dto.request.PracticeSyncRequest
-import com.ruege.mobile.data.network.dto.response.PracticeSyncResponse
+import com.ruege.mobile.data.repository.Result
+import com.ruege.mobile.data.network.dto.response.PracticeStatisticsGetResponse
+import com.ruege.mobile.data.mapper.toEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -21,46 +22,53 @@ class PracticeSyncRepository @Inject constructor(
     private val practiceApiService: PracticeApiService,
     private val practiceStatisticsDao: PracticeStatisticsDao,
     private val practiceAttemptDao: PracticeAttemptDao,
-    private val userRepository: UserRepository // Для получения userId
+    private val userRepository: UserRepository 
 ) {
 
-    suspend fun performFullSync() = withContext(Dispatchers.IO) {
-        Timber.d("Начало полной синхронизации статистики практики...")
-        val userId = userRepository.getFirstUser()?.userId?.toString() // Изменено
-        if (userId == null) {
-            Timber.w("Пользователь не авторизован. Полная синхронизация статистики отменена.")
-            return@withContext Result.Failure(Exception("Пользователь не авторизован"))
-        }
+    suspend fun performFullSync(timestamp: Long?): Result<PracticeStatisticsGetResponse> = withContext(Dispatchers.IO) {
+        Timber.d("Начало полной PULL-синхронизации статистики практики...")
 
         try {
-            // 1. Собираем все локальные данные
-            val localStats = practiceStatisticsDao.getAllStatisticsSortedByEgeNumber().first()
-            val localAttempts = practiceAttemptDao.getRecentAttempts(Int.MAX_VALUE).first() // Все попытки
-
-            val statsDto = localStats.map { it.toSyncDto() }
-            val attemptsDto = localAttempts.map { it.toSyncDto() }
-
-            val request = PracticeSyncRequest(userId, statsDto, attemptsDto)
-
-            // 2. Отправляем на сервер
-            val response = practiceApiService.syncPracticeStatistics(request)
+            val response = practiceApiService.syncPracticeStatistics(timestamp)
 
             if (response.isSuccessful && response.body() != null) {
                 val syncResponse = response.body()!!
                 Timber.d("Сервер ответил, начинаем обновление локальной БД...")
-                // 3. Очищаем локальные таблицы (или делаем более умный merge)
-                // Для простоты пока полная очистка и вставка
-                // practiceStatisticsDao.clearAllStatistics() // НЕ ОЧИЩАЕМ
-                // practiceAttemptDao.clearAllAttempts()     // НЕ ОЧИЩАЕМ
 
-                // 4. Сохраняем данные от сервера
-                val serverStatsEntities = syncResponse.statistics.map { it.toEntity() }
-                val serverAttemptsEntities = syncResponse.attempts.map { it.toEntity() }
+                val serverStats = syncResponse.statistics.map { it.toEntity() }
+                
+                try {
+                    val localStatsMap = practiceStatisticsDao.getAllStatisticsSortedByEgeNumber().first().associateBy { it.egeNumber }
+                    val statsToUpdate = mutableListOf<PracticeStatisticsEntity>()
+                    val statsToInsert = mutableListOf<PracticeStatisticsEntity>()
 
-                practiceStatisticsDao.insertAll(serverStatsEntities)
-                practiceAttemptDao.insertAll(serverAttemptsEntities)
-                Timber.d("Локальная БД обновлена данными с сервера. Статистики: ${serverStatsEntities.size}, Попытки: ${serverAttemptsEntities.size}")
-                Result.Success(syncResponse) // Возвращаем ответ сервера
+                    for (serverStat in serverStats) {
+                        val localStat = localStatsMap[serverStat.egeNumber]
+                        if (localStat != null) {
+                            if (serverStat.lastAttemptDate > localStat.lastAttemptDate) {
+                                statsToUpdate.add(serverStat)
+                            }
+                        } else {
+                            statsToInsert.add(serverStat)
+                        }
+                    }
+
+                    if (statsToInsert.isNotEmpty()) {
+                        practiceStatisticsDao.insertAll(statsToInsert)
+                        Timber.d("Вставлено ${statsToInsert.size} новых записей статистики.")
+                    }
+                    if (statsToUpdate.isNotEmpty()) {
+                        practiceStatisticsDao.updateAll(statsToUpdate)
+                        Timber.d("Обновлено ${statsToUpdate.size} записей статистики.")
+                    }
+
+                } catch (e: Exception) {
+                    Timber.e(e, "Ошибка при слиянии данных статистики")
+                }
+                
+                Timber.d("Локальная БД обновлена данными с сервера.")
+                
+                Result.Success(syncResponse)
             } else {
                 Timber.e("Ошибка полной синхронизации: ${response.code()} - ${response.message()}")
                 Result.Failure(Exception("Ошибка сервера: ${response.code()}"))
@@ -71,11 +79,6 @@ class PracticeSyncRepository @Inject constructor(
         }
     }
 
-    // TODO: Реализовать sendUpdates (для эндпоинта /branch)
-    // Этот метод будет собирать только новые/измененные данные (например, за последнюю сессию или по флагу isSynced)
-    // и отправлять их на сервер.
-
-    // Методы-мапперы для DTO <-> Entity
     private fun PracticeStatisticsEntity.toSyncDto() = PracticeStatisticSyncDto(
         egeNumber = this.egeNumber,
         totalAttempts = this.totalAttempts,
@@ -85,7 +88,7 @@ class PracticeSyncRepository @Inject constructor(
 
     private fun PracticeAttemptEntity.toSyncDto() = PracticeAttemptSyncDto(
         attemptIdLocal = this.attemptId,
-        taskId = this.taskId ?: 0, // Если taskId nullable, нужно значение по умолчанию
+        taskId = this.taskId ?: 0,
         isCorrect = this.isCorrect,
         attemptDate = this.attemptDate
     )
@@ -100,10 +103,10 @@ class PracticeSyncRepository @Inject constructor(
     }
 
     private fun com.ruege.mobile.data.network.dto.response.PracticeAttemptSyncResponseDto.toEntity(): PracticeAttemptEntity {
-        return PracticeAttemptEntity(
-            this.taskId,
-            this.isCorrect,
-            this.attemptDate
-        )
+        val entity = PracticeAttemptEntity()
+        entity.taskId = this.taskId
+        entity.isCorrect = this.isCorrect
+        entity.attemptDate = this.attemptDate
+        return entity
     }
 } 
