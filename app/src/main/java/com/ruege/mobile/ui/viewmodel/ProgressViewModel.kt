@@ -193,14 +193,21 @@ class ProgressViewModel @Inject constructor(
      */
     fun checkAndInitializeProgressAndLoad() {
         viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null 
+            _error.value = null
             Log.d(TAG, "checkAndInitializeProgressAndLoad: Начало операции.")
-            try {
-                Log.d(TAG, "checkAndInitializeProgressAndLoad: Запускаем PULL с сервера (refreshProgress).")
-                progressRepository.refreshProgress() 
-                Log.d(TAG, "checkAndInitializeProgressAndLoad: refreshProgress завершен.")
 
+            launch {
+                try {
+                    Log.d(TAG, "checkAndInitializeProgressAndLoad: Запускаем PULL с сервера (refreshProgress).")
+                    progressRepository.refreshProgress()
+                    Log.d(TAG, "checkAndInitializeProgressAndLoad: refreshProgress завершен.")
+                } catch (e: Exception) {
+                    Log.e(TAG, "checkAndInitializeProgressAndLoad: Ошибка при обновлении прогресса с сервера", e)
+                    _error.postValue("Не удалось обновить прогресс: ${e.message}")
+                }
+            }
+
+            try {
                 val isConsideredNewSetupLocally = progressRepository.checkAndSetUserSetupStatus()
                 Log.d(TAG, "checkAndInitializeProgressAndLoad: checkAndSetUserSetupStatus результат: $isConsideredNewSetupLocally")
 
@@ -215,8 +222,7 @@ class ProgressViewModel @Inject constructor(
                 Log.e(TAG, "checkAndInitializeProgressAndLoad: Ошибка при начальной загрузке/инициализации прогресса", e)
                 _error.postValue("Не удалось загрузить/инициализировать прогресс: ${e.message}")
             } finally {
-                _isLoading.value = false
-                Log.d(TAG, "checkAndInitializeProgressAndLoad: Операция завершена, isLoading установлен в false.")
+                Log.d(TAG, "checkAndInitializeProgressAndLoad: Операция завершена.")
             }
         }
     }

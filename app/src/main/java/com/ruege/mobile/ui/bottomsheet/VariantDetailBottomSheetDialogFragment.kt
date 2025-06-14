@@ -48,6 +48,8 @@ import com.ruege.mobile.data.local.entity.VariantTaskEntity
 import com.ruege.mobile.data.local.entity.UserVariantTaskAnswerEntity
 import com.ruege.mobile.utilss.Resource
 import com.ruege.mobile.ui.viewmodel.VariantViewModel
+import com.ruege.mobile.ui.viewmodel.PracticeViewModel
+import com.ruege.mobile.model.VariantResult
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -81,6 +83,7 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
     }
 
     private val variantViewModel: VariantViewModel by activityViewModels()
+    private val practiceViewModel: PracticeViewModel by activityViewModels()
     private var currentVariantId: Int? = null
     private var currentVariantTitle: String? = null
 
@@ -232,9 +235,14 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
         }
         
         btnFinishVariant.setOnClickListener {
-            currentVariantId?.let {
-                Log.d(TAG_VARIANT_DETAIL_BS, "Нажата кнопка 'Завершить вариант' для variantId: $it")
-                variantViewModel.checkVariantAnswers(it) 
+            currentVariantId?.let { variantId ->
+                Log.d(TAG_VARIANT_DETAIL_BS, "Нажата кнопка 'Завершить вариант' для variantId: $variantId")
+                
+                // Сохраняем результаты варианта перед проверкой
+                saveVariantResults(variantId)
+                
+                // Вызываем проверку варианта
+                variantViewModel.checkVariantAnswers(variantId)
             } ?: Log.e(TAG_VARIANT_DETAIL_BS, "Невозможно завершить вариант, currentVariantId is null")
         }
 
@@ -279,9 +287,13 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
             override fun onFinish() {
                 timeRemainingInMillis = 0
-                tvTimer.text = "00:00:00"
-                Toast.makeText(requireContext(), "Время вышло!", Toast.LENGTH_LONG).show()
-                 currentVariantId?.let { variantViewModel.checkVariantAnswers(it) }
+                                  tvTimer.text = "00:00:00"
+                  Toast.makeText(requireContext(), "Время вышло!", Toast.LENGTH_LONG).show()
+                  currentVariantId?.let { 
+                     // Сохраняем результаты варианта перед автоматической проверкой по истечении времени
+                     saveVariantResults(it)
+                     variantViewModel.checkVariantAnswers(it) 
+                 }
             }
         }.start()
     }
@@ -827,6 +839,80 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
             startTimer()
             Log.d(TAG_VARIANT_DETAIL_BS, "Таймер возобновлен.")
         }
+    }
+
+    /**
+     * Сохраняет результаты выполнения варианта в статистику заданий
+     */
+    private fun saveVariantResults(variantId: Int) {
+        val tasks = currentTasks ?: return
+        val userAnswers = currentUserAnswers ?: return
+        
+        if (tasks.isEmpty() || userAnswers.isEmpty()) {
+            Log.d(TAG_VARIANT_DETAIL_BS, "Нет заданий или ответов для сохранения результатов варианта")
+            return
+        }
+        
+        val completionTime = TIMER_DURATION_MS - timeRemainingInMillis
+        
+        // Группируем задания по номеру ЕГЭ
+        val tasksByEgeNumber = tasks.filter { !it.egeNumber.isNullOrEmpty() }
+                                  .groupBy { it.egeNumber }
+        
+        // Для каждого номера ЕГЭ создаем VariantResult и сохраняем в статистику
+        tasksByEgeNumber.forEach { (egeNumber, tasksForNumber) ->
+            if (egeNumber.isNullOrEmpty()) return@forEach
+            
+            // Создаем список детальных ответов для заданий этого номера ЕГЭ
+            val taskAnswers = tasksForNumber.mapNotNull { task ->
+                val userAnswer = userAnswers[task.variantTaskId]
+                if (userAnswer != null) {
+                    VariantResult.TaskAnswer(
+                        taskId = task.variantTaskId.toString(),
+                        userAnswer = userAnswer.userSubmittedAnswer ?: "",
+                        correctAnswer = task.solutionText ?: "",
+                        isCorrect = userAnswer.isSubmissionCorrect ?: false
+                    )
+                } else null
+            }
+            
+            // Считаем количество правильных ответов для этого номера ЕГЭ
+            val correctAnswers = taskAnswers.count { it.isCorrect }
+            
+            val variantResult = VariantResult(
+                variantId = variantId.toString(),
+                tasks = taskAnswers,
+                score = correctAnswers,
+                maxScore = tasksForNumber.size,
+                completionTime = completionTime,
+                timestamp = System.currentTimeMillis()
+            )
+            
+            // Сохраняем результат в статистику через viewModel
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    Log.d(TAG_VARIANT_DETAIL_BS, "Сохранение результата варианта для egeNumber: $egeNumber, " +
+                          "правильно: $correctAnswers из ${tasksForNumber.size}")
+                    
+                    // Получаем статистику для этого номера ЕГЭ
+                    val statistics = practiceViewModel.getStatisticsByEgeNumber(egeNumber)
+                    
+                    if (statistics != null) {
+                        // Обновляем статистику с данными варианта
+                        Log.d(TAG_VARIANT_DETAIL_BS, "Обновляем существующую статистику для $egeNumber с данными варианта")
+                        practiceViewModel.saveVariantResults(egeNumber, variantResult)
+                    } else {
+                        // Создаем новую запись статистики с данными варианта
+                        Log.d(TAG_VARIANT_DETAIL_BS, "Создаем новую статистику для $egeNumber с данными варианта")
+                        practiceViewModel.saveVariantResults(egeNumber, variantResult)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG_VARIANT_DETAIL_BS, "Ошибка при сохранении результата варианта для $egeNumber", e)
+                }
+            }
+        }
+        
+        Toast.makeText(requireContext(), "Результаты варианта сохранены", Toast.LENGTH_SHORT).show()
     }
 
     private fun createTaskTableLayout(context: Context, statement: String): View {

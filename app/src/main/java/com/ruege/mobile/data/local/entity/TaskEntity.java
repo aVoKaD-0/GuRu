@@ -160,24 +160,32 @@ public class TaskEntity {
                 break;
         }
 
+        int orderPosition;
+        try {
+            orderPosition = Integer.parseInt(this.egeNumber);
+        } catch (NumberFormatException e) {
+            orderPosition = 1;
+        }
+
         return new com.ruege.mobile.model.TaskItem(
             String.valueOf(this.id),
             "Задание " + this.egeNumber,
             this.egeNumber,
-            currentDescription, 
-            currentContent,     
-            answerType,          
-            1,                        
-            0,                        
-            null,                     
-            this.solution,           
+            currentDescription,
+            currentContent,
+            answerType,
+            1,
+            0,
+            null,
+            this.solution,
             this.explanation,
             this.textId,
-            null,                     
-            false,                    
-            null,                     
-            null,                     
-            0                         
+            orderPosition,
+            null,
+            false,
+            null,
+            null,
+            0
         );
     }
 } 

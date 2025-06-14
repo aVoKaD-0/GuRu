@@ -155,7 +155,9 @@
             }
 
             tasksTopicsLiveData.observeForever { entities ->
-                _taskItemsState.value = Resource.Success(entities.map { it.toContentItem() })
+                // Сортируем задания по orderPosition перед отображением в UI
+                val sortedEntities = entities.sortedBy { it.orderPosition }
+                _taskItemsState.value = Resource.Success(sortedEntities.map { it.toContentItem() })
             }
         }
 
@@ -193,7 +195,22 @@
          * Вызывается при переключении на вкладку.
          */
         fun loadTasksTopicsOnly() {
-            _taskItemsState.value = _taskItemsState.value
+            val currentData = _taskItemsState.value?.data
+            if (currentData != null) {
+                // Сортируем задания по orderPosition перед отображением
+                val sortedData = currentData.sortedBy { 
+                    // Извлекаем номер задания из contentId для сортировки
+                    try {
+                        val egeNumber = it.contentId.replace("task_group_", "")
+                        egeNumber.toInt()
+                    } catch (e: NumberFormatException) {
+                        Int.MAX_VALUE
+                    }
+                }
+                _taskItemsState.value = Resource.Success(sortedData)
+            } else {
+                _taskItemsState.value = _taskItemsState.value
+            }
             Timber.d("Displaying current task topics.")
         }
 
@@ -973,6 +990,11 @@
                     Timber.d("Force refreshing task topics")
                     contentRepository.refreshTasksTopics()
                     Timber.d("Force refresh for task topics initiated successfully")
+                    
+                    // После обновления данных, получаем их и сортируем
+                    val entities = contentRepository.getTasksTopicsStream().first()
+                    val sortedEntities = entities.sortedBy { it.orderPosition }
+                    _taskItemsState.value = Resource.Success(sortedEntities.map { it.toContentItem() })
                 } catch (e: Exception) {
                     Timber.e(e, "Error force refreshing task topics: ${e.message}")
                     _errorMessage.value = "Ошибка принудительного обновления групп заданий: ${e.message}"
@@ -985,6 +1007,14 @@
         fun selectAllTasks(isSelected: Boolean) {
             val currentItems = _taskItemsState.value?.data ?: return
             val updatedItems = currentItems.map { it.copy(isSelected = isSelected) }
+                .sortedBy { 
+                    try {
+                        val egeNumber = it.contentId.replace("task_group_", "")
+                        egeNumber.toInt()
+                    } catch (e: NumberFormatException) {
+                        Int.MAX_VALUE
+                    }
+                }
             _taskItemsState.value = Resource.Success(updatedItems)
             _isAnyTaskSelected.value = updatedItems.any { it.isSelected }
         }
@@ -996,6 +1026,13 @@
                     it.copy(isSelected = isSelected)
                 } else {
                     it
+                }
+            }.sortedBy { 
+                try {
+                    val egeNumber = it.contentId.replace("task_group_", "")
+                    egeNumber.toInt()
+                } catch (e: NumberFormatException) {
+                    Int.MAX_VALUE
                 }
             }
             _taskItemsState.value = Resource.Success(updatedItems)

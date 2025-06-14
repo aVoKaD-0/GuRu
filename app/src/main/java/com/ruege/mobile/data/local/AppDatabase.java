@@ -6,6 +6,7 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 import androidx.annotation.NonNull;
 import androidx.sqlite.db.SupportSQLiteDatabase;
+import androidx.room.migration.Migration;
 import com.ruege.mobile.data.local.dao.CategoryDao;
 import com.ruege.mobile.data.local.dao.ContentDao;
 import com.ruege.mobile.data.local.dao.NewsDao;
@@ -69,7 +70,7 @@ import com.ruege.mobile.data.local.entity.TaskTextEntity;
         DownloadedTheoryEntity.class,
         TaskTextEntity.class
     },
-    version = 18,
+    version = 19,
     exportSchema = true
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -98,6 +99,47 @@ public abstract class AppDatabase extends RoomDatabase {
 
     private static volatile AppDatabase INSTANCE;
     private static final String DATABASE_NAME = "mobile_database.db";
+    
+    // Миграция с версии 18 на 19: добавление поля variant_data в таблицу practice_statistics
+    static final Migration MIGRATION_18_19 = new Migration(18, 19) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            try {
+                // Создаем временную таблицу с новой структурой
+                database.execSQL(
+                    "CREATE TABLE practice_statistics_temp (" +
+                    "ege_number TEXT NOT NULL PRIMARY KEY, " +
+                    "total_attempts INTEGER NOT NULL, " +
+                    "correct_attempts INTEGER NOT NULL, " +
+                    "last_attempt_date INTEGER NOT NULL, " +
+                    "variant_data TEXT)"
+                );
+
+                // Копируем данные из старой таблицы в новую
+                database.execSQL(
+                    "INSERT INTO practice_statistics_temp (ege_number, total_attempts, correct_attempts, last_attempt_date) " +
+                    "SELECT ege_number, total_attempts, correct_attempts, last_attempt_date FROM practice_statistics"
+                );
+
+                // Удаляем старую таблицу
+                database.execSQL("DROP TABLE practice_statistics");
+
+                // Переименовываем временную таблицу
+                database.execSQL("ALTER TABLE practice_statistics_temp RENAME TO practice_statistics");
+            } catch (Exception e) {
+                // В случае ошибки, создаем таблицу заново
+                database.execSQL("DROP TABLE IF EXISTS practice_statistics");
+                database.execSQL(
+                    "CREATE TABLE practice_statistics (" +
+                    "ege_number TEXT NOT NULL PRIMARY KEY, " +
+                    "total_attempts INTEGER NOT NULL, " +
+                    "correct_attempts INTEGER NOT NULL, " +
+                    "last_attempt_date INTEGER NOT NULL, " +
+                    "variant_data TEXT)"
+                );
+            }
+        }
+    };
 
     public static AppDatabase getInstance(final Context context) {
         if (INSTANCE == null) {
@@ -108,6 +150,7 @@ public abstract class AppDatabase extends RoomDatabase {
                             AppDatabase.class,
                             DATABASE_NAME
                         )
+                        .addMigrations(MIGRATION_18_19)
                         .fallbackToDestructiveMigration()
                         .addCallback(new Callback() {
                             @Override

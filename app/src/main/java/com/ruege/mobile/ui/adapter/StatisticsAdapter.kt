@@ -3,6 +3,7 @@ package com.ruege.mobile.ui.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -15,13 +16,14 @@ import java.util.Date
 import java.util.Locale
 
 class StatisticsAdapter(
-    private val onPracticeClick: (String) -> Unit
+    private val onPracticeClick: (String) -> Unit,
+    private val onStatisticsClick: (String) -> Unit
 ) : ListAdapter<PracticeStatisticsEntity, StatisticsAdapter.StatisticsViewHolder>(DIFF_CALLBACK) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StatisticsViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_practice_statistics, parent, false)
-        return StatisticsViewHolder(view, onPracticeClick)
+        return StatisticsViewHolder(view, onPracticeClick, onStatisticsClick)
     }
 
     override fun onBindViewHolder(holder: StatisticsViewHolder, position: Int) {
@@ -30,7 +32,8 @@ class StatisticsAdapter(
 
     class StatisticsViewHolder(
         itemView: View,
-        private val onPracticeClick: (String) -> Unit
+        private val onPracticeClick: (String) -> Unit,
+        private val onStatisticsClick: (String) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
 
         private val tvEgeNumber: TextView = itemView.findViewById(R.id.tvEgeNumber)
@@ -39,6 +42,7 @@ class StatisticsAdapter(
         private val progressSuccess: ProgressBar = itemView.findViewById(R.id.progressSuccess)
         private val tvLastAttempt: TextView = itemView.findViewById(R.id.tvLastAttempt)
         private val tvPractice: TextView = itemView.findViewById(R.id.tvPractice)
+        private val ivVariantData: ImageView = itemView.findViewById(R.id.ivVariantData)
 
         private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
 
@@ -69,6 +73,19 @@ class StatisticsAdapter(
             tvPractice.setOnClickListener {
                 onPracticeClick(statistics.egeNumber)
             }
+            
+            // Показываем индикатор наличия данных варианта, если они есть
+            if (statistics.variantData != null && statistics.variantData.isNotEmpty()) {
+                ivVariantData.visibility = View.VISIBLE
+                
+                // Делаем весь элемент кликабельным для просмотра деталей варианта
+                itemView.setOnClickListener {
+                    onStatisticsClick(statistics.egeNumber)
+                }
+            } else {
+                ivVariantData.visibility = View.GONE
+                itemView.setOnClickListener(null)
+            }
         }
     }
 
@@ -81,7 +98,8 @@ class StatisticsAdapter(
             override fun areContentsTheSame(oldItem: PracticeStatisticsEntity, newItem: PracticeStatisticsEntity): Boolean {
                 return oldItem.totalAttempts == newItem.totalAttempts &&
                        oldItem.correctAttempts == newItem.correctAttempts &&
-                       oldItem.lastAttemptDate == newItem.lastAttemptDate
+                       oldItem.lastAttemptDate == newItem.lastAttemptDate &&
+                       oldItem.variantData == newItem.variantData
             }
         }
     }

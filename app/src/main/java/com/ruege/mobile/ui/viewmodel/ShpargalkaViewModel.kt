@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ruege.mobile.data.repository.ShpargalkaRepository
 import com.ruege.mobile.model.ContentItem
-import com.ruege.mobile.model.ShpargalkaItem
 import com.ruege.mobile.utilss.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
@@ -40,6 +39,7 @@ class ShpargalkaViewModel @Inject constructor(
     fun getPdfLoadError(): LiveData<String?> = _pdfLoadError
 
     init {
+        // Инициализируем наблюдение за данными из репозитория
         shpargalkaRepository.getShpargalkaContents().observeForever { items ->
             _shpargalkaItemsState.value = Resource.Success(items ?: emptyList())
         }
@@ -47,7 +47,6 @@ class ShpargalkaViewModel @Inject constructor(
     
     /**
      * Запускает фоновое обновление данных с сервера.
-     * Не меняет состояние UI напрямую, полагается на LiveData из БД.
      */
     fun syncShpargalkaData() {
         viewModelScope.launch {
@@ -62,13 +61,13 @@ class ShpargalkaViewModel @Inject constructor(
     }
 
     /**
-     * Просто отображает текущие данные из LiveData.
+     * Отображает текущие данные из кеша.
      * Вызывается при переключении на вкладку.
      */
     fun loadShpargalkaItems() {
         val currentValue = shpargalkaRepository.getShpargalkaContents().value
         _shpargalkaItemsState.value = Resource.Success(currentValue ?: emptyList())
-        Timber.d("Отображение текущих данных шпаргалок из БД.")
+        Timber.d("Отображение текущих данных шпаргалок из кеша.")
     }
     
     fun loadShpargalkaPdf(pdfId: Int) {
@@ -136,10 +135,10 @@ class ShpargalkaViewModel @Inject constructor(
          viewModelScope.launch {
              _shpargalkaItemsState.value = Resource.Loading()
              try {
-                 Timber.d(TAG, "Принудительное обновление данных шпаргалок (refreshShpargalkaData)")
+                 Timber.d("Принудительное обновление данных шпаргалок")
                  shpargalkaRepository.fetchAndCacheShpargalkaItems()
              } catch (e: Exception) {
-                 Timber.e(TAG, "Error refreshing shpargalka data", e)
+                 Timber.e(e, "Error refreshing shpargalka data")
                  _shpargalkaItemsState.value = Resource.Error(
                      e.message ?: "Ошибка обновления шпаргалок",
                       _shpargalkaItemsState.value?.data

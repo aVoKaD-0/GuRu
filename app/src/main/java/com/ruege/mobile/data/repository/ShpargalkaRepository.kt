@@ -40,8 +40,10 @@ class ShpargalkaRepository @Inject constructor(
     private val _errorMessage = MutableLiveData<String>()
     val errorMessage: LiveData<String> = _errorMessage
     
-    private val _shpargalkaItems = MutableLiveData<List<ShpargalkaItem>>()
-    val shpargalkaItems: LiveData<List<ShpargalkaItem>> = _shpargalkaItems
+    // Кеш для хранения шпаргалок в памяти
+    private val shpargalkaCache = mutableMapOf<String, ContentItem>()
+    private var lastCacheUpdateTime: Long = 0
+    private val CACHE_EXPIRATION_TIME = 24 * 60 * 60 * 1000L // 24 часа
     
     private val _contentItems = MutableLiveData<List<ContentItem>>()
     
@@ -57,39 +59,30 @@ class ShpargalkaRepository @Inject constructor(
                     return
                 }
                 
-                val items = mutableListOf<ShpargalkaItem>()
-                val contentEntities = mutableListOf<ContentEntity>()
+                val items = mutableListOf<ContentItem>()
                 
                 for (itemData in shpargalkaData) {
                     val id = (itemData["pdf_id"] as? String)?.toIntOrNull() ?: 0
                     val title = itemData["title"] as? String ?: ""
                     val description = itemData["description"] as? String ?: ""
                     val fileName = itemData["file_name"] as? String
-                    val publishTime = itemData["publication_date"] as? String
                     
                     val contentId = "shpargalka_$id"
                     
-                    contentEntities.add(ContentEntity.createForKotlin(
-                        contentId,
-                        title,
-                        description,
-                        "shpargalka",
-                        "shpargalki",
-                        false,
-                        false,
-                        id
-                    ))
-                    
-                    items.add(ShpargalkaItem(
-                        id = id,
+                    // Создаем ContentItem для кеша
+                    val contentItem = ContentItem(
+                        contentId = contentId,
                         title = title,
                         description = description,
-                        groupId = "shpargalki",
-                        groupTitle = "Шпаргалки",
-                        fileName = fileName,
-                        publishTime = publishTime,
-                        isDownloaded = isPdfDownloaded(id)
-                    ))
+                        type = "shpargalka",
+                        parentId = "shpargalki",
+                        isDownloaded = isPdfDownloaded(id),
+                        isSelected = false
+                    )
+                    
+                    // Добавляем в кеш и в список
+                    shpargalkaCache[contentId] = contentItem
+                    items.add(contentItem)
                 }
                 
                 withContext(Dispatchers.IO) {
@@ -109,41 +102,9 @@ class ShpargalkaRepository @Inject constructor(
                     }
                 }
                 
-                val needUpdate = withContext(Dispatchers.IO) {
-                    val existingIds = contentDao.getContentIdsByType("shpargalka")
-                    val newIds = contentEntities.map { it.contentId }.toSet()
-                    
-                    existingIds.size != newIds.size || !existingIds.containsAll(newIds)
-                }
-                
-                if (needUpdate) {
-                    withContext(Dispatchers.IO) {
-                        contentDao.insertAll(contentEntities)
-                        Log.d(TAG, "Сохранено ${contentEntities.size} шпаргалок в БД")
-                        
-                        val contentItems = contentEntities.map { entity ->
-                            ContentItem(
-                                entity.contentId,
-                                entity.title,
-                                entity.description ?: "",
-                                entity.type,
-                                entity.parentId ?: "",
-                                entity.isDownloaded,
-                                false
-                            )
-                        }
-                        
-                        withContext(Dispatchers.Main) {
-                            _contentItems.value = contentItems
-                            Log.d(TAG, "Обновлен кэш ContentItems с ${contentItems.size} элементами шпаргалок")
-                        }
-                    }
-                } else {
-                    Log.d(TAG, "Данные шпаргалок не изменились, пропускаем обновление БД")
-                }
-                
-                _shpargalkaItems.postValue(items)
-                Log.d(TAG, "Обновлены данные шпаргалок в памяти: ${items.size} записей")
+                lastCacheUpdateTime = System.currentTimeMillis()
+                _contentItems.postValue(items)
+                Log.d(TAG, "Обновлен кеш шпаргалок: ${items.size} записей")
             } else {
                 _errorMessage.postValue("Ошибка загрузки шпаргалок: ${response.message()}")
                 Log.e(TAG, "Error fetching shpargalka items: ${response.code()} ${response.message()}")
@@ -155,64 +116,30 @@ class ShpargalkaRepository @Inject constructor(
     }
     
     fun getShpargalkaContents(): LiveData<List<ContentItem>> {
-        if (_contentItems.value == null || _contentItems.value?.isEmpty() == true) {
+        if (shpargalkaCache.isEmpty() || isCacheExpired()) {
             refreshShpargalkaContentsInternal()
+        } else {
+            _contentItems.value = shpargalkaCache.values.toList()
+            Log.d(TAG, "Использую кеш шпаргалок: ${shpargalkaCache.size} элементов")
         }
         return _contentItems
+    }
+    
+    private fun isCacheExpired(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        return currentTime - lastCacheUpdateTime > CACHE_EXPIRATION_TIME
     }
     
     private fun refreshShpargalkaContentsInternal() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val contentEntities = contentDao.getContentsByTypeSync("shpargalka")
-                
-                if (!contentEntities.isNullOrEmpty()) {
-                    val items = contentEntities.map { entity ->
-                        ContentItem(
-                            entity.contentId,
-                            entity.title,
-                            entity.description ?: "",
-                            entity.type,
-                            entity.parentId ?: "",
-                            entity.isDownloaded,
-                            false
-                        )
-                    }
-                    _contentItems.postValue(items)
-                    Log.d(TAG, "Загружено ${items.size} шпаргалок из БД для отображения")
-                } else {
-                    Log.d(TAG, "Шпаргалки в БД не найдены, запускаем загрузку")
-                    fetchAndCacheShpargalkaItems()
-                    
-                    val updatedEntities = contentDao.getContentsByTypeSync("shpargalka")
-                    val updatedItems = updatedEntities.map { entity ->
-                        ContentItem(
-                            entity.contentId,
-                            entity.title,
-                            entity.description ?: "",
-                            entity.type,
-                            entity.parentId ?: "",
-                            entity.isDownloaded,
-                            false
-                        )
-                    }
-                    _contentItems.postValue(updatedItems)
-                    Log.d(TAG, "После загрузки с сервера получено ${updatedItems.size} шпаргалок")
-                }
+                Log.d(TAG, "Запускаем загрузку шпаргалок с сервера")
+                fetchAndCacheShpargalkaItems()
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting shpargalka contents", e)
-                _contentItems.postValue(emptyList())
                 _errorMessage.postValue("Ошибка при получении данных шпаргалок")
             }
         }
-    }
-    
-    fun refreshShpargalkaContents(): LiveData<List<ContentItem>> {
-        Log.d(TAG, "Принудительное обновление данных шпаргалок из БД")
-        
-        refreshShpargalkaContentsInternal()
-        
-        return _contentItems
     }
     
     suspend fun downloadShpargalkaPdf(pdfId: Int): File? {

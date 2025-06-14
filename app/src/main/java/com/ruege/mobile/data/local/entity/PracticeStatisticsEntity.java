@@ -22,6 +22,9 @@ public class PracticeStatisticsEntity {
 
     @ColumnInfo(name = "last_attempt_date")
     private long lastAttemptDate;
+    
+    @ColumnInfo(name = "variant_data")
+    private String variantData;
 
     public PracticeStatisticsEntity() {
     }
@@ -33,6 +36,17 @@ public class PracticeStatisticsEntity {
         this.totalAttempts = totalAttempts;
         this.correctAttempts = correctAttempts;
         this.lastAttemptDate = lastAttemptDate;
+        this.variantData = null;
+    }
+    
+    @Ignore
+    public PracticeStatisticsEntity(@NonNull String egeNumber, int totalAttempts, 
+                                    int correctAttempts, long lastAttemptDate, String variantData) {
+        this.egeNumber = egeNumber;
+        this.totalAttempts = totalAttempts;
+        this.correctAttempts = correctAttempts;
+        this.lastAttemptDate = lastAttemptDate;
+        this.variantData = variantData;
     }
 
     @NonNull
@@ -51,6 +65,10 @@ public class PracticeStatisticsEntity {
     public long getLastAttemptDate() {
         return lastAttemptDate;
     }
+    
+    public String getVariantData() {
+        return variantData;
+    }
 
     public void setEgeNumber(@NonNull String egeNumber) {
         this.egeNumber = egeNumber;
@@ -66,6 +84,10 @@ public class PracticeStatisticsEntity {
 
     public void setLastAttemptDate(long lastAttemptDate) {
         this.lastAttemptDate = lastAttemptDate;
+    }
+    
+    public void setVariantData(String variantData) {
+        this.variantData = variantData;
     }
 
     public float getSuccessRate() {

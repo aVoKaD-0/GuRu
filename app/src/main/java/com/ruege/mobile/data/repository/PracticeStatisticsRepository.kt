@@ -6,6 +6,7 @@ import com.ruege.mobile.data.local.dao.PracticeStatisticsDao
 import com.ruege.mobile.data.local.entity.PracticeAttemptEntity
 import com.ruege.mobile.data.local.entity.PracticeStatisticsEntity
 import com.ruege.mobile.model.TaskItem
+import com.ruege.mobile.model.VariantResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -63,6 +64,66 @@ class PracticeStatisticsRepository @Inject constructor(
     }
 
     /**
+     * Обновляет данные варианта в статистике для указанного номера ЕГЭ
+     */
+    suspend fun updateVariantData(egeNumber: String, variantResult: VariantResult) {
+        withContext(Dispatchers.IO) {
+            try {
+                // Создаем запись статистики, если её еще нет
+                practiceStatisticsDao.createStatisticsIfNotExists(egeNumber)
+                
+                // Получаем текущую статистику
+                val currentStats = practiceStatisticsDao.getStatisticsByEgeNumberSync(egeNumber)
+                
+                if (currentStats != null) {
+                    // Преобразуем результаты варианта в JSON строку
+                    val variantDataJson = variantResult.toJsonString()
+                    
+                    // Обновляем поле variant_data в статистике
+                    currentStats.variantData = variantDataJson
+                    
+                    // Сохраняем обновленную статистику
+                    practiceStatisticsDao.update(currentStats)
+                    
+                    Log.d("PracticeStatsRepo", "Variant data updated for egeNumber: $egeNumber")
+                    
+                    // Помечаем для синхронизации
+                    progressSyncRepository.queueStatisticsUpdate(currentStats, false)
+                } else {
+                    Log.w("PracticeStatsRepo", "Failed to update variant data - statistics not found for egeNumber: $egeNumber")
+                }
+            } catch (e: Exception) {
+                Log.e("PracticeStatsRepo", "Error updating variant data for egeNumber: $egeNumber", e)
+                throw e
+            }
+        }
+    }
+    
+    /**
+     * Получает результаты варианта для указанного номера ЕГЭ
+     */
+    suspend fun getVariantResult(egeNumber: String): VariantResult? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val stats = practiceStatisticsDao.getStatisticsByEgeNumberSync(egeNumber)
+                if (stats != null && !stats.variantData.isNullOrEmpty()) {
+                    // Преобразуем JSON строку в объект VariantResult
+                    VariantResult.fromJsonString(
+                        stats.variantData!!,
+                        "", // ID варианта неизвестен из хранимых данных
+                        stats.lastAttemptDate
+                    )
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e("PracticeStatsRepo", "Error getting variant result for egeNumber: $egeNumber", e)
+                null
+            }
+        }
+    }
+
+    /**
      * Возвращает Flow со списком всей статистики по заданиям, отсортированной по номеру ЕГЭ.
      */
     fun getAllStatisticsSorted(): Flow<List<PracticeStatisticsEntity>> {
@@ -78,5 +139,14 @@ class PracticeStatisticsRepository @Inject constructor(
 
     fun getRecentAttempts(limit: Int): Flow<List<PracticeAttemptEntity>> {
         return practiceAttemptDao.getRecentAttempts(limit)
+    }
+
+    /**
+     * Получает статистику для указанного номера ЕГЭ
+     */
+    suspend fun getStatisticsByEgeNumber(egeNumber: String): PracticeStatisticsEntity? {
+        return withContext(Dispatchers.IO) {
+            practiceStatisticsDao.getStatisticsByEgeNumberSync(egeNumber)
+        }
     }
 }

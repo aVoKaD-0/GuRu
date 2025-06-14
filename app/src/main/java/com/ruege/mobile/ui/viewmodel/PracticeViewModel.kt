@@ -9,7 +9,9 @@ import com.ruege.mobile.data.local.entity.PracticeStatisticsEntity
 import com.ruege.mobile.data.local.entity.TaskEntity
 import com.ruege.mobile.data.repository.PracticeRepository
 import com.ruege.mobile.data.repository.PracticeSyncRepository
+import com.ruege.mobile.data.repository.PracticeStatisticsRepository
 import com.ruege.mobile.data.repository.Result
+import com.ruege.mobile.model.VariantResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -33,7 +35,8 @@ data class PracticeAttemptWithTask(
 @HiltViewModel
 class PracticeViewModel @Inject constructor(
     private val practiceRepository: PracticeRepository,
-    private val practiceSyncRepository: PracticeSyncRepository
+    private val practiceSyncRepository: PracticeSyncRepository,
+    private val practiceStatisticsRepository: PracticeStatisticsRepository
 ) : ViewModel() {
 
     val totalAttempts: LiveData<Int> = practiceRepository.getTotalAttempts()
@@ -108,8 +111,9 @@ class PracticeViewModel @Inject constructor(
      */
     suspend fun getStatisticsByEgeNumber(egeNumber: String): PracticeStatisticsEntity? {
         return try {
-            practiceRepository.getStatisticsByEgeNumber(egeNumber).first()
+            practiceStatisticsRepository.getStatisticsByEgeNumber(egeNumber)
         } catch (e: Exception) {
+            _error.postValue("Ошибка при получении статистики: ${e.message}")
             null
         }
     }
@@ -172,9 +176,41 @@ class PracticeViewModel @Inject constructor(
     }
 
     /**
+     * Сохраняет результаты варианта для указанного номера ЕГЭ
+     * @param egeNumber номер задания ЕГЭ
+     * @param variantResult результаты выполнения варианта
+     */
+    fun saveVariantResults(egeNumber: String, variantResult: VariantResult) {
+        viewModelScope.launch {
+            try {
+                practiceStatisticsRepository.updateVariantData(egeNumber, variantResult)
+            } catch (e: Exception) {
+                _error.postValue("Ошибка при сохранении результатов варианта: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Получает результаты варианта для указанного номера ЕГЭ
+     * @param egeNumber номер задания ЕГЭ
+     * @return результаты варианта или null, если их нет
+     */
+    suspend fun getVariantResultForEgeNumber(egeNumber: String): VariantResult? {
+        return try {
+            practiceStatisticsRepository.getVariantResult(egeNumber)
+        } catch (e: Exception) {
+            _error.postValue("Ошибка при получении результатов варианта: ${e.message}")
+            null
+        }
+    }
+
+    /**
      * Инициализирует данные при создании ViewModel
      */
     init {
-        syncPracticeData()
+        loadRecentAttempts()
+        viewModelScope.launch {
+            syncPracticeData()
+        }
     }
 } 

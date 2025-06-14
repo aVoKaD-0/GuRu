@@ -67,6 +67,7 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
                 is Resource.Success -> {
                     binding.shimmerContentShpargalka.stopShimmer()
                     binding.shimmerContentShpargalka.visibility = View.GONE
+                    
                     val items = resource.data
                     if (items != null && items.isNotEmpty()) {
                         contentAdapter.submitList(items)
@@ -82,9 +83,26 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
                     binding.shimmerContentShpargalka.stopShimmer()
                     binding.shimmerContentShpargalka.visibility = View.GONE
                     binding.recyclerViewShpargalka.visibility = View.GONE
+                    
                     binding.errorTextViewShpargalka.text = "Ошибка загрузки: ${resource.message}"
                     binding.errorTextViewShpargalka.visibility = View.VISIBLE
                     binding.errorTextViewShpargalka.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
+                    
+                    // Если есть старые данные, показываем их
+                    val staleData = resource.data
+                    if (staleData != null && staleData.isNotEmpty()) {
+                        contentAdapter.submitList(staleData)
+                        binding.recyclerViewShpargalka.visibility = View.VISIBLE
+                        Toast.makeText(requireContext(), "Ошибка обновления: ${resource.message}. Показаны старые данные.", Toast.LENGTH_LONG).show()
+                    }
+                }
+                else -> {
+                    // Обработка для любых других возможных состояний
+                    binding.shimmerContentShpargalka.stopShimmer()
+                    binding.shimmerContentShpargalka.visibility = View.GONE
+                    binding.recyclerViewShpargalka.visibility = View.GONE
+                    binding.errorTextViewShpargalka.visibility = View.VISIBLE
+                    binding.errorTextViewShpargalka.text = "Неизвестное состояние"
                 }
             }
         }
@@ -102,7 +120,7 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
     }
 
     override fun onItemSelectionChanged(item: ContentItem, isSelected: Boolean) {
-        
+        // Пока не используется для шпаргалок
     }
 
     override fun onDestroyView() {

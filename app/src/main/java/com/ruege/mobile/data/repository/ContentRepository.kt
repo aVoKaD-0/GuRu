@@ -382,9 +382,11 @@ class ContentRepository @Inject constructor(
         val actualCategoryId = categoryId.replace("task_group_", "")
         Timber.d("Запрос заданий для категории: $categoryId (ID для API: $actualCategoryId), страница: $page")
 
-        if (page == 1 && tasksCategoryCache.containsKey(actualCategoryId)) {
-            Timber.d("Категория $actualCategoryId найдена в кэше. Возвращаем ${tasksCategoryCache[actualCategoryId]?.size} заданий.")
-            emit(Result.Success(tasksCategoryCache[actualCategoryId]!!))
+        // Проверяем кеш по обоим возможным ключам - с префиксом и без
+        val cachedTasks = tasksCategoryCache[categoryId] ?: tasksCategoryCache[actualCategoryId]
+        if (page == 1 && cachedTasks != null) {
+            Timber.d("Категория $categoryId найдена в кэше. Возвращаем ${cachedTasks.size} заданий.")
+            emit(Result.Success(cachedTasks))
             return@flow
         }
 
@@ -392,9 +394,11 @@ class ContentRepository @Inject constructor(
             val localTasks = withContext(Dispatchers.IO) { taskDao.getTasksByEgeNumberSync(actualCategoryId) }
             if (localTasks.isNotEmpty()) {
                 Timber.d("Найдено ${localTasks.size} скачанных заданий в БД для категории $actualCategoryId. Пагинация для этой категории будет отключена.")
-                val taskItems = localTasks.map { it.toTaskItem() }
-                tasksCategoryCache[actualCategoryId] = taskItems
-                hasMoreItemsMap[actualCategoryId] = false
+                val taskItems = localTasks.map { it.toTaskItem() }.sortedBy { it.orderPosition }
+                
+                // Сохраняем в кеш с полным ID (с префиксом)
+                tasksCategoryCache[categoryId] = taskItems
+                hasMoreItemsMap[categoryId] = false
                 emit(Result.Success(taskItems))
                 return@flow
             }
@@ -415,14 +419,15 @@ class ContentRepository @Inject constructor(
                 Timber.d("С сервера для EGE $actualCategoryId получено ${taskDtos.size} заданий.")
 
                 if (page == 1) {
-                    hasMoreItemsMap[actualCategoryId] = taskDtos.size >= pageSize
+                    hasMoreItemsMap[categoryId] = taskDtos.size >= pageSize
                 }
 
                 if (taskDtos.isNotEmpty()) {
-                    val taskItems = taskDtos.map { it.toTaskItem() }
+                    val taskItems = taskDtos.map { it.toTaskItem() }.sortedBy { it.orderPosition }
                     
                     if (page == 1) {
-                        tasksCategoryCache[actualCategoryId] = taskItems
+                        // Сохраняем в кеш с полным ID (с префиксом)
+                        tasksCategoryCache[categoryId] = taskItems
                     }
                     
                     emit(Result.Success(taskItems))
@@ -585,10 +590,10 @@ class ContentRepository @Inject constructor(
      * Загружает следующую страницу заданий для указанной категории.
      */
     fun loadMoreTasksByCategory(categoryId: String): Flow<Result<List<TaskItem>>> = flow {
-        val egeNumber = categoryId
-        val currentPage = currentPageMap.getOrPut(egeNumber) { 1 } + 1
+        val egeNumber = categoryId.replace("task_group_", "")
+        val currentPage = currentPageMap.getOrPut(categoryId) { 1 } + 1
         
-        Timber.d("Загрузка дополнительных заданий для категории $egeNumber, страница $currentPage")
+        Timber.d("Загрузка дополнительных заданий для категории $categoryId (ID для API: $egeNumber), страница $currentPage")
         
         try {
             val response = taskApiService.getTasksByEgeNumberPaginated(
@@ -602,30 +607,31 @@ class ContentRepository @Inject constructor(
                 val responseBody = response.body()
                 val taskDtos = responseBody?.tasks ?: emptyList()
                 
-                hasMoreItemsMap[egeNumber] = taskDtos.size >= pageSize
+                hasMoreItemsMap[categoryId] = taskDtos.size >= pageSize
                 
                 if (taskDtos.isNotEmpty()) {
-                    currentPageMap[egeNumber] = currentPage
+                    currentPageMap[categoryId] = currentPage
                     
                     val additionalTaskItems = taskDtos.map { it.toTaskItem() }
                     
-                    val existingTasks = tasksCategoryCache[egeNumber] ?: emptyList()
-                    tasksCategoryCache[egeNumber] = existingTasks + additionalTaskItems
+                    // Используем полный ID категории с префиксом для кеширования
+                    val existingTasks = tasksCategoryCache[categoryId] ?: emptyList()
+                    tasksCategoryCache[categoryId] = (existingTasks + additionalTaskItems).sortedBy { it.orderPosition }
                     
-                    Timber.d("Успешно загружено и добавлено в кэш ${additionalTaskItems.size} заданий для EGE $egeNumber. Новы размер кэша: ${tasksCategoryCache[egeNumber]?.size}")
+                    Timber.d("Успешно загружено и добавлено в кэш ${additionalTaskItems.size} заданий для категории $categoryId. Новый размер кэша: ${tasksCategoryCache[categoryId]?.size}")
                     
-                    emit(Result.Success(tasksCategoryCache[egeNumber]!!))
+                    emit(Result.Success(tasksCategoryCache[categoryId]!!))
                 } else {
-                    hasMoreItemsMap[egeNumber] = false
-                    emit(Result.Success(tasksCategoryCache[egeNumber] ?: emptyList()))
-                    Timber.d("Сервер вернул пустой список. Больше заданий для EGE $egeNumber нет.")
+                    hasMoreItemsMap[categoryId] = false
+                    emit(Result.Success(tasksCategoryCache[categoryId] ?: emptyList()))
+                    Timber.d("Сервер вернул пустой список. Больше заданий для категории $categoryId нет.")
                 }
             } else {
-                Timber.w("Не удалось загрузить дополнительные задания с сервера для EGE $egeNumber (Код: ${response.code()}).")
+                Timber.w("Не удалось загрузить дополнительные задания с сервера для категории $categoryId (Код: ${response.code()}).")
                 emit(Result.Failure(Exception("Ошибка сервера: ${response.code()}")))
             }
         } catch (e: Exception) { 
-            Timber.e(e, "Ошибка сети при получении дополнительных заданий для EGE $egeNumber.")
+            Timber.e(e, "Ошибка сети при получении дополнительных заданий для категории $categoryId.")
             emit(Result.Failure(e))
         }
     }
@@ -682,6 +688,13 @@ class ContentRepository @Inject constructor(
     }
 
     private fun TaskDto.toTaskItem(): TaskItem {
+        // Получаем порядковый номер из номера задания ЕГЭ
+        val orderPosition = try {
+            this.egeNumber.toInt()
+        } catch (e: NumberFormatException) {
+            1
+        }
+        
         return TaskItem(
             taskId = this.id.toString(),
             title = "Задание ${this.egeNumber}",
@@ -695,11 +708,19 @@ class ContentRepository @Inject constructor(
             correctAnswer = this.solution,
             explanation = this.explanation,
             textId = this.textId,
+            orderPosition = orderPosition,
             isSolved = false
         )
     }
 
     private fun TaskEntity.toTaskItem(): TaskItem {
+        // Получаем порядковый номер из номера задания ЕГЭ
+        val orderPosition = try {
+            this.egeNumber.toInt()
+        } catch (e: NumberFormatException) {
+            1
+        }
+        
         return TaskItem(
             taskId = this.id.toString(),
             title = "Задание ${this.egeNumber}",
@@ -713,12 +734,20 @@ class ContentRepository @Inject constructor(
             correctAnswer = this.solution,
             explanation = this.explanation,
             textId = this.getTextId(),
+            orderPosition = orderPosition,
             isSolved = false
         )
     }
 
     private fun TaskEntity.toTaskItemWithText(textDto: com.ruege.mobile.data.network.dto.response.TextDataDto?): TaskItem {
         val contentHtml = this.taskText ?: ""
+        
+        // Получаем порядковый номер из номера задания ЕГЭ
+        val orderPosition = try {
+            this.egeNumber.toInt()
+        } catch (e: NumberFormatException) {
+            1
+        }
 
         return TaskItem(
             taskId = this.id.toString(),
@@ -732,7 +761,8 @@ class ContentRepository @Inject constructor(
             solutions = null,
             correctAnswer = this.solution,
             explanation = this.explanation,
-            textId = this.getTextId()
+            textId = this.getTextId(),
+            orderPosition = orderPosition
         )
     }
 
@@ -810,6 +840,33 @@ class ContentRepository @Inject constructor(
                         taskTextDao.insertAll(textEntities)
                     }
                     Timber.d("Successfully downloaded and saved ${taskDtos.size} tasks for egeNumber $egeNumber.")
+                    
+                    val contentId = "task_group_$egeNumber"
+                    val title = "Задание $egeNumber"
+                    val description = "${taskDtos.size} заданий"
+                    
+                    // Преобразуем номер задания в позицию для сортировки
+                    val orderPosition = try {
+                        egeNumber.toInt()
+                    } catch (e: NumberFormatException) {
+                        1
+                    }
+                    
+                    val contentEntity = ContentEntity.createForKotlin(
+                        contentId,
+                        title,
+                        description,
+                        "task_group",
+                        null,
+                        true,  // Устанавливаем флаг isDownloaded
+                        false,
+                        egeNumber.toInt()
+                    )
+                    // Устанавливаем порядковый номер для сортировки
+                    contentEntity.setOrderPosition(orderPosition)
+                    
+                    contentDao.insert(contentEntity)
+                    Timber.d("Updated content table for task group $egeNumber marking as downloaded")
                     
                     emit(Result.Success(Unit))
                 } else {

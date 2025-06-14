@@ -63,17 +63,22 @@ class VariantViewModel @Inject constructor(
 
     fun fetchVariants() {
         viewModelScope.launch {
-            _variantsState.value = Resource.Loading()
+            variantRepository.getVariants().collect { resource ->
+                val currentState = _variantsState.value
+                if (currentState is Resource.Loading && resource is Resource.Success && resource.data.isNullOrEmpty()) {
+                    return@collect
+                }
+                _variantsState.value = resource
+            }
+        }
+        viewModelScope.launch {
             try {
                 variantRepository.fetchVariantsFromServer()
-
-                variantRepository.getVariants().collect { resource ->
-                    _variantsState.value = resource
-                }
-
             } catch (e: Exception) {
                 Log.e("ViewModel", "Error fetching variants", e)
-                _variantsState.value = Resource.Error("Ошибка загрузки вариантов: ${e.message}", null)
+                if (_variantsState.value !is Resource.Success || _variantsState.value?.data.isNullOrEmpty()) {
+                    _variantsState.value = Resource.Error("Ошибка загрузки вариантов: ${e.message}", null)
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.nio.charset.StandardCharsets
@@ -32,8 +33,24 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
     )
 
     private fun getSecretKey(): SecretKey {
-        val existingKey = keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry
-        return existingKey?.secretKey ?: generateSecretKey()
+        try {
+            val existingKey = keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry
+            return existingKey?.secretKey ?: generateSecretKey()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка получения ключа из KeyStore: ${e.message}", e)
+            // Если возникла ошибка при получении ключа, пробуем пересоздать его
+            try {
+                // Удаляем старый ключ, если он существует
+                if (keyStore.containsAlias(KEY_ALIAS)) {
+                    keyStore.deleteEntry(KEY_ALIAS)
+                    Log.d(TAG, "Старый ключ удален из KeyStore")
+                }
+                return generateSecretKey()
+            } catch (e2: Exception) {
+                Log.e(TAG, "Не удалось пересоздать ключ: ${e2.message}", e2)
+                throw e2
+            }
+        }
     }
 
     private fun generateSecretKey(): SecretKey {
@@ -47,7 +64,9 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             .setKeySize(256)
             .build()
         keyGenerator.init(spec)
-        return keyGenerator.generateKey()
+        val key = keyGenerator.generateKey()
+        Log.d(TAG, "Новый ключ шифрования создан")
+        return key
     }
 
     private fun encrypt(data: String): Pair<String, String>? {
@@ -76,6 +95,22 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             String(decryptedBytes, StandardCharsets.UTF_8)
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Ошибка дешифрования: ${e.javaClass.simpleName} - ${e.message}", e)
+            
+            // При ошибке дешифрования пробуем пересоздать ключ и очистить данные
+            if (e.message?.contains("Signature/MAC verification failed") == true || 
+                e.javaClass.simpleName == "AEADBadTagException") {
+                Log.d(TAG, "Обнаружена ошибка верификации MAC, пробуем пересоздать ключ")
+                try {
+                    if (keyStore.containsAlias(KEY_ALIAS)) {
+                        keyStore.deleteEntry(KEY_ALIAS)
+                        Log.d(TAG, "Ключ удален из-за ошибки верификации")
+                    }
+                    // Генерируем новый ключ
+                    generateSecretKey()
+                } catch (e2: Exception) {
+                    Log.e(TAG, "Ошибка при пересоздании ключа: ${e2.message}", e2)
+                }
+            }
             null
         }
     }
@@ -172,6 +207,16 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             remove(KEY_REFRESH_TOKEN)
             remove(KEY_REFRESH_TOKEN_IV)
             remove(KEY_ACCESS_TOKEN_EXPIRES_AT) 
+        }
+        
+        // При очистке токенов также пересоздаем ключ шифрования
+        try {
+            if (keyStore.containsAlias(KEY_ALIAS)) {
+                keyStore.deleteEntry(KEY_ALIAS)
+                Log.d(TAG, "Ключ шифрования удален при очистке токенов")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка при удалении ключа шифрования: ${e.message}", e)
         }
     }
 

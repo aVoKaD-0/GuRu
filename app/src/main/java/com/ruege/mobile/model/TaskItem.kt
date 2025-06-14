@@ -20,6 +20,7 @@ data class TaskItem(
     var correctAnswer: String? = null,
     var explanation: String? = null,  
     val textId: Int? = null,
+    val orderPosition: Int = 0,  // Добавлено поле для сортировки заданий
 
     var userAnswer: String? = null,
     var isSolved: Boolean = false, 
