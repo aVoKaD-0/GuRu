@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 import timber.log.Timber
+import androidx.lifecycle.Observer
 
 @HiltViewModel
 class ShpargalkaViewModel @Inject constructor(
@@ -33,16 +34,19 @@ class ShpargalkaViewModel @Inject constructor(
     val isPdfLoading: LiveData<Boolean> = _isPdfLoading
     
     private val _pdfLoadError = MutableLiveData<String?>()
+
+    private val dbObserver = Observer<List<ContentItem>> { items ->
+        _shpargalkaItemsState.value = Resource.Success(items ?: emptyList())
+    }
+    private val dbLiveData = shpargalkaRepository.getShpargalkaContents()
     
     fun getPdfLoadingStatus(): LiveData<Boolean> = _isPdfLoading
     fun currentPdfFile(): LiveData<File?> = _currentPdfFile
     fun getPdfLoadError(): LiveData<String?> = _pdfLoadError
 
     init {
-        // Инициализируем наблюдение за данными из репозитория
-        shpargalkaRepository.getShpargalkaContents().observeForever { items ->
-            _shpargalkaItemsState.value = Resource.Success(items ?: emptyList())
-        }
+        _shpargalkaItemsState.value = Resource.Loading()
+        dbLiveData.observeForever(dbObserver)
     }
     
     /**
@@ -58,16 +62,6 @@ class ShpargalkaViewModel @Inject constructor(
                 Timber.e(e, "Ошибка при фоновой синхронизации шпаргалок")
             }
         }
-    }
-
-    /**
-     * Отображает текущие данные из кеша.
-     * Вызывается при переключении на вкладку.
-     */
-    fun loadShpargalkaItems() {
-        val currentValue = shpargalkaRepository.getShpargalkaContents().value
-        _shpargalkaItemsState.value = Resource.Success(currentValue ?: emptyList())
-        Timber.d("Отображение текущих данных шпаргалок из кеша.")
     }
     
     fun loadShpargalkaPdf(pdfId: Int) {
@@ -133,7 +127,7 @@ class ShpargalkaViewModel @Inject constructor(
     
     fun refreshShpargalkaData() {
          viewModelScope.launch {
-             _shpargalkaItemsState.value = Resource.Loading()
+             _shpargalkaItemsState.value = Resource.Loading(_shpargalkaItemsState.value?.data)
              try {
                  Timber.d("Принудительное обновление данных шпаргалок")
                  shpargalkaRepository.fetchAndCacheShpargalkaItems()
@@ -145,5 +139,10 @@ class ShpargalkaViewModel @Inject constructor(
                  )
              }
          }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        dbLiveData.removeObserver(dbObserver)
     }
 }

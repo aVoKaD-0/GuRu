@@ -16,6 +16,9 @@ interface DownloadedTheoryDao {
     @Query("SELECT * FROM downloaded_theory WHERE content_id = :id")
     fun getDownloadedTheoryById(id: String): LiveData<DownloadedTheoryEntity>
 
+    @Query("SELECT * FROM downloaded_theory WHERE content_id = :id")
+    suspend fun getById(id: String): DownloadedTheoryEntity?
+
     @Query("SELECT content_id FROM downloaded_theory")
     suspend fun getAllIds(): List<String>
 

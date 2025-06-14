@@ -214,7 +214,6 @@ public class MainActivity extends AppCompatActivity {
 
             setupAdaptersAndObservers();
 
-            contentViewModel.syncInitialContent(); 
             shpargalkaViewModel.syncShpargalkaData(); 
 
             if (contentRepository != null) {
@@ -223,10 +222,12 @@ public class MainActivity extends AppCompatActivity {
                     LifecycleOwnerKt.getLifecycleScope(this),
                     contentLoaded -> {
                         if (Boolean.TRUE.equals(contentLoaded)) {
-                            Timber.d("Весь основной контент загружен. Инициализируем прогресс через ProgressViewModel.");
+                            Timber.d("LOG_CHAIN: MainActivity.onCreate - InitialContentLoaded = true. Вызов progressViewModel.checkAndInitializeProgressAndLoad()");
                             if (progressViewModel != null) {
                                 progressViewModel.checkAndInitializeProgressAndLoad();
                             }
+                        } else {
+                            Timber.d("LOG_CHAIN: MainActivity.onCreate - InitialContentLoaded = false.");
                         }
                     }
                 );
@@ -261,7 +262,15 @@ public class MainActivity extends AppCompatActivity {
             }
 
             userViewModel.getFirstUser();
-            userViewModel.getCurrentUser().observe(this, this::updateUserAvatar);
+            userViewModel.getCurrentUser().observe(this, user -> {
+                if (user != null) {
+                    Timber.d("LOG_CHAIN: MainActivity.onCreate - Пользователь авторизован. Запуск contentViewModel.syncInitialContent()");
+                    contentViewModel.syncInitialContent();
+                } else {
+                    Timber.d("LOG_CHAIN: MainActivity.onCreate - Пользователь не авторизован. Синхронизация контента не запускается.");
+                }
+                updateUserAvatar(user);
+            });
         } catch (Exception e) {
             Timber.e(e, "Ошибка при запуске приложения");
             if (e.getMessage() != null && e.getMessage().contains("duplicate column name: google_id")) {

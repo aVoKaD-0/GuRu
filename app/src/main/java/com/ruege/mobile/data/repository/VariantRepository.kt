@@ -34,6 +34,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import timber.log.Timber
 
 private const val TAG = "VariantRepository"
 
@@ -48,36 +50,51 @@ class VariantRepository @Inject constructor(
     private val userVariantTaskAnswerDao: UserVariantTaskAnswerDao
 ) {
 
-    private val variantsCache = MutableStateFlow<List<VariantEntity>>(emptyList())
-
     init { 
         Log.d(TAG, "VariantRepository initialized. variantApiService is null: ${variantApiService == null}")
     }
 
     fun getVariants(): Flow<Resource<List<VariantEntity>>> {
-        return combine(variantsCache, variantDao.getAllDownloadedVariantIds()) { cachedVariants, downloadedIds ->
-            val downloadedIdSet = downloadedIds.toSet()
-            val combinedList = cachedVariants.map { variant ->
-                variant.copy(isDownloaded = downloadedIdSet.contains(variant.variantId))
+        return variantDao.getAllVariants().map { variants ->
+            if (variants.isEmpty()) {
+                Resource.Loading() 
+            } else {
+                Resource.Success(variants)
             }
-            Resource.Success(combinedList)
         }
     }
 
     suspend fun fetchVariantsFromServer() {
         withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Attempting to fetch variants from network into cache...")
+                Log.d(TAG, "Attempting to fetch variants from network...")
                 val response = variantApiService.getVariants()
                 if (response.isSuccessful) {
                     val dtoList = response.body() ?: emptyList()
-                    variantsCache.value = dtoList.map { it.toEntity() }
-                    Log.d(TAG, "Fetched and cached ${dtoList.size} variants.")
+                    if (dtoList.isNotEmpty()) {
+                        
+                        val existingVariants = variantDao.getAllVariants().first()
+                        val existingVariantsMap = existingVariants.associateBy { it.variantId }
+
+                        val newVariantEntities = dtoList.map { dto ->
+                            val existingVariant = existingVariantsMap[dto.variantId]
+                            dto.toEntity().copy(
+                                isDownloaded = existingVariant?.isDownloaded ?: false,
+                                lastAccessedAt = existingVariant?.lastAccessedAt,
+                                remainingTimeMillis = existingVariant?.remainingTimeMillis
+                            )
+                        }
+                        
+                        variantDao.insertOrUpdateVariants(newVariantEntities)
+                        Log.d(TAG, "Fetched and saved/updated ${dtoList.size} variants to DB.")
+                    } else {
+                        Log.d(TAG, "Fetched and saved/updated ${dtoList.size} variants to DB. Error/")
+                    }
                 } else {
                     Log.w(TAG, "Failed to fetch variants from network. Code: ${response.code()}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching variants into cache", e)
+                Log.e(TAG, "Error fetching variants and saving to DB", e)
             }
         }
     }

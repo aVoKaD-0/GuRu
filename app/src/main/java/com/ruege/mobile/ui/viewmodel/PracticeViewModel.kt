@@ -161,8 +161,8 @@ class PracticeViewModel @Inject constructor(
                 is Result.Success -> {
 
                 }
-                is Result.Failure -> {
-                    _error.postValue("Ошибка синхронизации: ${result.exception.message}")
+                is Result.Error -> {
+                    _error.postValue("Ошибка синхронизации: ${result.message}")
                 }
                 is Result.Loading -> {
                     

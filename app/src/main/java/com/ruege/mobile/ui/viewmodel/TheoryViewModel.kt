@@ -67,30 +67,49 @@ class TheoryViewModel @Inject constructor(
             _isLoading.value = true
             _theoryContent.value = null
             _errorMessage.value = null
-            Timber.d("Загрузка HTML контента для теории: $contentId")
+            Timber.d("Загрузка контента для теории: $contentId")
 
             try {
+                // 1. Попробовать загрузить из локальной базы
+                val downloadedTheory = contentRepository.getDownloadedTheoryContent(contentId)
+                if (downloadedTheory != null) {
+                    Timber.d("Найдена скачанная теория для $contentId. Отображение из БД.")
+                    val theoryDto = TheoryContentDto(
+                        id = contentId.hashCode(), // Это поле не используется, но нужно для DTO
+                        egeNumber = 0, // Аналогично
+                        title = downloadedTheory.title,
+                        content = downloadedTheory.htmlContent,
+                        createdAt = "", // Аналогично
+                        updatedAt = "" // Аналогично
+                    )
+                    _theoryContent.value = theoryDto
+                    _isLoading.value = false
+                    return@launch
+                }
+
+                // 2. Если в локальной базе нет, идем в сеть
+                Timber.d("Скачанная теория для $contentId не найдена, загрузка из сети.")
                 val theoryDto = contentRepository.getTheoryContentById(contentId)
                 _isLoading.value = false
 
                 if (theoryDto != null) {
                     if (theoryDto.content.isNotEmpty()) {
                         _theoryContent.value = theoryDto
-                        Timber.d("HTML контент для $contentId (теория) успешно загружен.")
+                        Timber.d("HTML контент для $contentId (теория) успешно загружен из сети.")
                     } else {
                         _theoryContent.value = null
                         _errorMessage.value = "Содержимое теории отсутствует."
                         Timber.w("HTML контент для $contentId (теория) пуст.")
                     }
                 } else {
-                    _errorMessage.value = "Не удалось загрузить теорию (ответ null)."
+                    _errorMessage.value = "Не удалось загрузить теорию. Проверьте подключение к интернету."
                     Timber.w("Не удалось загрузить теорию для $contentId, DTO is null.")
                     _theoryContent.value = null
                 }
             } catch (e: Exception) {
                 _isLoading.value = false
                 Timber.e(e, "Ошибка загрузки HTML контента для $contentId (теория)")
-                _errorMessage.value = "Ошибка загрузки теории: ${e.message ?: "Неизвестная ошибка"}"
+                _errorMessage.value = "Ошибка загрузки теории: ${e.message ?: "Проверьте интернет-соединение"}"
                 _theoryContent.value = null
             }
         }
@@ -102,7 +121,7 @@ class TheoryViewModel @Inject constructor(
                 when (result) {
                     is Result.Loading -> _downloadStatus.value = Resource.Loading()
                     is Result.Success -> _downloadStatus.value = Resource.Success(Unit)
-                    is Result.Failure -> _downloadStatus.value = Resource.Error(result.exception.message ?: "Ошибка скачивания")
+                    is Result.Error -> _downloadStatus.value = Resource.Error(result.message ?: "Ошибка скачивания")
                 }
             }
         }
@@ -114,7 +133,7 @@ class TheoryViewModel @Inject constructor(
                 when (result) {
                     is Result.Loading -> _deleteStatus.value = Resource.Loading()
                     is Result.Success -> _deleteStatus.value = Resource.Success(Unit)
-                    is Result.Failure -> _deleteStatus.value = Resource.Error(result.exception.message ?: "Ошибка удаления")
+                    is Result.Error -> _deleteStatus.value = Resource.Error(result.message ?: "Ошибка удаления")
                 }
             }
         }

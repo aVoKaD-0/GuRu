@@ -46,6 +46,8 @@ import com.ruege.mobile.data.network.dto.response.TheorySummaryDto
 import kotlinx.coroutines.flow.flowOn
 import com.ruege.mobile.data.local.dao.TaskTextDao
 import com.ruege.mobile.data.local.entity.TaskTextEntity
+import kotlinx.coroutines.launch
+import com.ruege.mobile.data.local.dao.UserDao
 
 @Singleton
 class ContentRepository @Inject constructor(
@@ -56,17 +58,28 @@ class ContentRepository @Inject constructor(
     private val essayApiService: EssayApiService,
     private val downloadedTheoryDao: DownloadedTheoryDao,
     private val taskTextDao: TaskTextDao,
-    private val externalScope: CoroutineScope
+    private val externalScope: CoroutineScope,
+    private val userDao: UserDao
 ) {
 
     private val TAG = "ContentRepository"
     
-    private val theoryTopicsCache = MutableStateFlow<List<TheorySummaryDto>>(emptyList())
-    private val taskTopicsCache = MutableStateFlow<List<ContentEntity>>(emptyList())
-    
     private val _theoryContentLoaded = MutableStateFlow(false)
     private val _essayContentLoaded = MutableStateFlow(false)
     private val _tasksContentLoaded = MutableStateFlow(false)
+
+    init {
+        externalScope.launch {
+            userDao.getFirstUserFlow().collect { user ->
+                if (user == null) {
+                    _theoryContentLoaded.value = false
+                    _essayContentLoaded.value = false
+                    _tasksContentLoaded.value = false
+                    Timber.d("User logged out or not present, content loaded flags reset.")
+                }
+            }
+        }
+    }
 
     val initialContentLoaded: StateFlow<Boolean> = combine(
         _theoryContentLoaded,
@@ -116,15 +129,16 @@ class ContentRepository @Inject constructor(
      * Получает поток списка тем теории из локальной БД.
      */
     fun getTheoryTopicsStream(): Flow<List<ContentEntity>> {
-        Log.d(TAG, "Getting theory topics stream from cache")
-        return theoryTopicsCache.combine(downloadedTheoryDao.getAllIdsAsFlow()) { dtos, downloadedIds ->
-            val downloadedIdsSet = downloadedIds.toSet()
-            dtos.map { dto ->
-                dto.toContentEntity().apply {
-                    this.isDownloaded = downloadedIdsSet.contains(this.contentId)
+        Timber.d("Getting theory topics stream from DB")
+        return contentDao.getContentsByType("theory").asFlow()
+            .combine(downloadedTheoryDao.getAllIdsAsFlow()) { entities, downloadedIds ->
+                val downloadedIdsSet = downloadedIds.toSet()
+                entities.map { entity ->
+                    entity.apply {
+                        this.isDownloaded = downloadedIdsSet.contains(this.contentId)
+                    }
                 }
             }
-        }
     }
 
     /**
@@ -139,16 +153,17 @@ class ContentRepository @Inject constructor(
      * Получает поток списка заданий из локальной БД.
      */
     fun getTasksTopicsStream(): Flow<List<ContentEntity>> {
-        Timber.d("Getting tasks topics stream from cache and combining with DB status")
-        return taskTopicsCache.combine(taskDao.getDownloadedEgeNumbersStream()) { cachedGroups, downloadedEgeNumbers ->
-            val downloadedSet = downloadedEgeNumbers.toSet()
-            cachedGroups.map { group ->
-                val egeNumber = group.contentId.removePrefix("task_group_")
-                group.apply {
-                    this.isDownloaded = downloadedSet.contains(egeNumber)
+        Timber.d("Getting tasks topics stream from DB")
+        return contentDao.getContentsByType("task_group").asFlow()
+            .combine(taskDao.getDownloadedEgeNumbersStream()) { entities, downloadedEgeNumbers ->
+                val downloadedSet = downloadedEgeNumbers.toSet()
+                entities.map { group ->
+                    val egeNumber = group.contentId.removePrefix("task_group_")
+                    group.apply {
+                        this.isDownloaded = downloadedSet.contains(egeNumber)
+                    }
                 }
             }
-        }
     }
 
     /**
@@ -159,30 +174,22 @@ class ContentRepository @Inject constructor(
     suspend fun refreshTheoryTopics() {
         withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Refreshing theory topics from network...")
+                Timber.d("LOG_CHAIN: ContentRepository.refreshTheoryTopics - Начало. Вызов theoryApiService.getAllTheory()")
                 val response = theoryApiService.getAllTheory()
 
                 if (response.isSuccessful && response.body() != null) {
                     val theorySummaries = response.body()!!
-                    theoryTopicsCache.value = theorySummaries
-                    Log.d(TAG, "Successfully refreshed and cached ${theorySummaries.size} theory topics from network")
+                    val theoryEntities = theorySummaries.map { it.toContentEntity() }
+                    contentDao.insertAll(theoryEntities)
+                    Timber.d("LOG_CHAIN: ContentRepository.refreshTheoryTopics - Успешно. Загружено и сохранено в БД ${theoryEntities.size} тем.")
                 } else {
-                    Log.w(TAG, "Failed to refresh theory topics. Code: ${response.code()}")
-                    if (theoryTopicsCache.value.isNotEmpty()) {
-                        Log.d(TAG, "Using existing theory topics from cache (${theoryTopicsCache.value.size} items)")
-                    } else {
-                        Log.w(TAG, "No existing theory topics in cache")
-                    }
+                    Timber.w("LOG_CHAIN: ContentRepository.refreshTheoryTopics - Ошибка. Код: ${response.code()}. Тело: ${response.errorBody()?.string()}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing theory topics", e)
-                if (theoryTopicsCache.value.isNotEmpty()) {
-                    Log.d(TAG, "Using existing theory topics from cache after error (${theoryTopicsCache.value.size} items)")
-                } else {
-                    Log.w(TAG, "No existing theory topics in cache after error")
-                }
+                Timber.e(e, "LOG_CHAIN: ContentRepository.refreshTheoryTopics - Исключение.")
             } finally {
                 _theoryContentLoaded.value = true
+                Timber.d("LOG_CHAIN: ContentRepository.refreshTheoryTopics - Блок finally. _theoryContentLoaded = true")
             }
         }
     }
@@ -195,7 +202,7 @@ class ContentRepository @Inject constructor(
     suspend fun refreshEssayTopics() {
         withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Refreshing essay topics from network...")
+                Timber.d("LOG_CHAIN: ContentRepository.refreshEssayTopics - Начало. Вызов essayApiService.getAllEssayTopics()")
                 val response = essayApiService.getAllEssayTopics()
 
                 if (response.isSuccessful && response.body() != null) {
@@ -208,26 +215,15 @@ class ContentRepository @Inject constructor(
                     }
                     
                     contentDao.insertAll(allContentEntities)
-                    Log.d(TAG, "Successfully refreshed and saved ${allContentEntities.size} essay topics from network to DB")
+                    Timber.d("LOG_CHAIN: ContentRepository.refreshEssayTopics - Успешно. Загружено и сохранено в БД ${allContentEntities.size} тем сочинений.")
                 } else {
-                    Log.w(TAG, "Failed to refresh essay topics. Code: ${response.code()}")
-                    val existingEssays = contentDao.getContentsByTypeSync("essay")
-                    if (existingEssays.isNotEmpty()) {
-                        Log.d(TAG, "Using existing essay topics from DB (${existingEssays.size} items)")
-                    } else {
-                        Log.w(TAG, "No existing essay topics in DB")
-                    }
+                    Timber.w("LOG_CHAIN: ContentRepository.refreshEssayTopics - Ошибка. Код: ${response.code()}. Тело: ${response.errorBody()?.string()}")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing essay topics", e)
-                val existingEssays = contentDao.getContentsByTypeSync("essay")
-                if (existingEssays.isNotEmpty()) {
-                    Log.d(TAG, "Using existing essay topics from DB after error (${existingEssays.size} items)")
-                } else {
-                    Log.w(TAG, "No existing essay topics in DB after error")
-                }
+                Timber.e(e, "LOG_CHAIN: ContentRepository.refreshEssayTopics - Исключение")
             } finally {
                 _essayContentLoaded.value = true
+                Timber.d("LOG_CHAIN: ContentRepository.refreshEssayTopics - Блок finally. _essayContentLoaded = true")
             }
         }
     }
@@ -240,12 +236,13 @@ class ContentRepository @Inject constructor(
     suspend fun refreshTasksTopics() {
         withContext(Dispatchers.IO) {
             try {
-                Timber.d("Refreshing tasks topics from network...")
+                Timber.d("LOG_CHAIN: ContentRepository.refreshTasksTopics - Начало. Вызов taskApiService.getAllTasks()")
 
                 val response = taskApiService.getAllTasks()
 
                 if (response.isSuccessful && response.body() != null) {
                     val taskGroups = response.body()!!
+                    
                     val newTasksEntities = mutableListOf<ContentEntity>()
 
                     for (group in taskGroups) {
@@ -283,27 +280,26 @@ class ContentRepository @Inject constructor(
                         newTasksEntities.add(entity)
                     }
 
-                    taskTopicsCache.value = newTasksEntities
-                    Timber.d("Successfully refreshed and cached ${newTasksEntities.size} task groups from network")
+                    contentDao.insertAll(newTasksEntities)
+                    Timber.d("LOG_CHAIN: ContentRepository.refreshTasksTopics - Успешно. Загружено и сохранено в БД ${newTasksEntities.size} групп заданий.")
                 } else {
-                    Timber.w("Failed to refresh task group topics. Code: ${response.code()}")
-                    if (taskTopicsCache.value.isNotEmpty()) {
-                        Timber.d("Using existing task groups from cache (${taskTopicsCache.value.size} items)")
-                    } else {
-                        Timber.w("No existing task groups in cache")
-                    }
+                    Timber.w("LOG_CHAIN: ContentRepository.refreshTasksTopics - Ошибка. Код: ${response.code()}. Тело: ${response.errorBody()?.string()}")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error refreshing task topics")
-                if (taskTopicsCache.value.isNotEmpty()) {
-                    Timber.d("Using existing task groups from cache after error (${taskTopicsCache.value.size} items)")
-                } else {
-                    Timber.w("No existing task groups in cache after error")
-                }
+                Timber.e(e, "LOG_CHAIN: ContentRepository.refreshTasksTopics - Исключение.")
             } finally {
                 _tasksContentLoaded.value = true
+                Timber.d("LOG_CHAIN: ContentRepository.refreshTasksTopics - Блок finally. _tasksContentLoaded = true")
             }
         }
+    }
+
+    private suspend fun updateTaskContent(task: TaskItem) {
+        // val taskEntity = taskDao.getTaskById(task.taskId.toInt()).firstOrNull()
+        // if (taskEntity != null) {
+        //     taskEntity.solved = task.isSolved
+        //     taskDao.update(taskEntity)
+        // }
     }
 
     /**
@@ -406,7 +402,7 @@ class ContentRepository @Inject constructor(
         
         if (!actualCategoryId.all { it.isDigit() }) {
             Timber.e("Некорректный ID категории для API: $actualCategoryId")
-            emit(Result.Failure(IllegalArgumentException("Некорректный ID категории для API: $actualCategoryId")))
+            emit(Result.Error("Некорректный ID категории для API: $actualCategoryId"))
             return@flow
         }
         
@@ -435,7 +431,7 @@ class ContentRepository @Inject constructor(
                     val localTasks = withContext(Dispatchers.IO) { taskDao.getTasksByEgeNumberSync(actualCategoryId) }
                     if (page == 1 && localTasks.isEmpty()) {
                          Timber.w("Сервер вернул пустой список, и локальных данных нет для $categoryId.")
-                         emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
+                         emit(Result.Error(NO_DATA_AND_NETWORK_ISSUE_FLAG))
                     } else {
                          emit(Result.Success(emptyList()))
                     }
@@ -446,7 +442,7 @@ class ContentRepository @Inject constructor(
                 if (localTasks.isNotEmpty() && page == 1) {
                     emit(Result.Success(localTasks.map { it.toTaskItem() }))
                 } else {
-                    emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
+                    emit(Result.Error(NO_DATA_AND_NETWORK_ISSUE_FLAG))
                 }
             }
         } catch (e: Exception) {
@@ -455,7 +451,7 @@ class ContentRepository @Inject constructor(
             if (localTasks.isNotEmpty() && page == 1) {
                 emit(Result.Success(localTasks.map { it.toTaskItem() }))
             } else {
-                emit(Result.Failure(Exception(NO_DATA_AND_NETWORK_ISSUE_FLAG)))
+                emit(Result.Error(NO_DATA_AND_NETWORK_ISSUE_FLAG))
             }
         }
     }
@@ -472,7 +468,7 @@ class ContentRepository @Inject constructor(
             taskIdString.toInt()
         } catch (e: NumberFormatException) {
             Timber.e(e, "Неверный формат ID задания: $taskIdString")
-            emit(Result.Failure(IllegalArgumentException("Неверный формат ID задания: $taskIdString")))
+            emit(Result.Error("Неверный формат ID задания: $taskIdString"))
             return@flow
         }
 
@@ -503,14 +499,14 @@ class ContentRepository @Inject constructor(
                     taskDetailCache[taskIdInt] = taskItem
                     emit(Result.Success(taskItem))
                 } else {
-                    emit(Result.Failure(Exception("Пустой ответ от сервера для задания $taskIdString")))
+                    emit(Result.Error("Пустой ответ от сервера для задания $taskIdString"))
                 }
             } else {
-                emit(Result.Failure(Exception("Ошибка сервера: ${response.code()} для задания $taskIdString")))
+                emit(Result.Error("Ошибка сервера: ${response.code()} для задания $taskIdString"))
             }
         } catch (e: Exception) {
             Timber.e(e, "Ошибка сети при получении деталей задания ID $taskIdString.")
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message.toString()))
         }
     }
 
@@ -628,11 +624,11 @@ class ContentRepository @Inject constructor(
                 }
             } else {
                 Timber.w("Не удалось загрузить дополнительные задания с сервера для категории $categoryId (Код: ${response.code()}).")
-                emit(Result.Failure(Exception("Ошибка сервера: ${response.code()}")))
+                emit(Result.Error("Ошибка сервера: ${response.code()}"))
             }
         } catch (e: Exception) { 
             Timber.e(e, "Ошибка сети при получении дополнительных заданий для категории $categoryId.")
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message.toString()))
         }
     }
 
@@ -670,16 +666,16 @@ class ContentRepository @Inject constructor(
                     emit(Result.Success(taskTextDto.content))
                 } else {
                     Timber.w("Тело ответа или текст для $textId пустое.")
-                    emit(Result.Failure(Exception("Отсутствует текст в ответе сервера")))
+                    emit(Result.Error("Отсутствует текст в ответе сервера"))
                 }
             } else {
                 val errorMsg = "Ошибка при загрузке текста задания $textId: ${response.code()} - ${response.message()}"
                 Timber.e(errorMsg)
-                emit(Result.Failure(Exception(errorMsg)))
+                emit(Result.Error(errorMsg))
             }
         } catch (e: Exception) {
             Timber.e(e, "Исключение при загрузке текста задания $textId")
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message.toString()))
         }
     }
 
@@ -771,32 +767,20 @@ class ContentRepository @Inject constructor(
         try {
             val theoryDto = getTheoryContentById(contentId)
             if (theoryDto != null) {
-                val downloadedEntity = DownloadedTheoryEntity(
-                    theoryDto.id.toString(),
+                val entity = DownloadedTheoryEntity(
+                    contentId,
                     theoryDto.title,
                     theoryDto.content,
                     System.currentTimeMillis()
                 )
-                downloadedTheoryDao.insert(downloadedEntity)
-
-                val contentEntity = ContentEntity.createForKotlin(
-                    theoryDto.id.toString(),
-                    theoryDto.title,
-                    "", 
-                    "theory",
-                    null, 
-                    true, 
-                    false, 
-                    theoryDto.egeNumber
-                )
-                contentDao.insert(contentEntity)
-
+                downloadedTheoryDao.insert(entity)
+                contentDao.updateDownloadStatus(contentId, true)
                 emit(Result.Success(Unit))
             } else {
-                emit(Result.Failure(Exception("Не удалось загрузить теорию для скачивания.")))
+                emit(Result.Error("Не удалось получить данные для скачивания"))
             }
         } catch (e: Exception) {
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message ?: "Неизвестная ошибка"))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -804,14 +788,14 @@ class ContentRepository @Inject constructor(
         return downloadedTheoryDao.getDownloadedTheoryById(contentId)
     }
 
-    suspend fun deleteDownloadedTheory(contentId: String): Flow<Result<Unit>> = flow {
+    fun deleteDownloadedTheory(contentId: String): Flow<Result<Unit>> = flow {
         emit(Result.Loading)
         try {
             downloadedTheoryDao.deleteById(contentId)
-            contentDao.deleteById(contentId)
+            contentDao.updateDownloadStatus(contentId, false)
             emit(Result.Success(Unit))
         } catch (e: Exception) {
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message ?: "Неизвестная ошибка"))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -870,14 +854,14 @@ class ContentRepository @Inject constructor(
                     
                     emit(Result.Success(Unit))
                 } else {
-                    emit(Result.Failure(Exception("No tasks found for group $egeNumber to download.")))
+                    emit(Result.Error("No tasks found for group $egeNumber to download."))
                 }
             } else {
-                emit(Result.Failure(Exception("Failed to fetch tasks for group $egeNumber. Code: ${response.code()}")))
+                emit(Result.Error("Failed to fetch tasks for group $egeNumber. Code: ${response.code()}"))
             }
         } catch (e: Exception) {
             Timber.e(e, "Error downloading task group $egeNumber")
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message.toString()))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -898,7 +882,46 @@ class ContentRepository @Inject constructor(
             emit(Result.Success(Unit))
         } catch(e: Exception) {
             Timber.e(e, "Error deleting task group $egeNumber")
-            emit(Result.Failure(e))
+            emit(Result.Error(e.message.toString()))
         }
     }.flowOn(Dispatchers.IO)
+
+    suspend fun getTaskById(taskId: String): TaskEntity? {
+        return try {
+            taskDao.getTaskById(taskId.toInt()).firstOrNull()
+        } catch (e: NumberFormatException) {
+            Timber.e(e, "Invalid taskId format: $taskId")
+            null
+        }
+    }
+
+    fun getTheoryContent(contentId: String): Flow<Result<TheoryContentDto>> = flow {
+        emit(Result.Loading)
+        
+        // Сначала проверяем кэш
+        val cachedContent = theoryContentCache[contentId]
+        if (cachedContent != null) {
+            emit(Result.Success(cachedContent))
+            return@flow
+        }
+
+        try {
+            val response = theoryApiService.getTheoryContent(contentId)
+            if (response.isSuccessful && response.body() != null) {
+                val content = response.body()!!
+                theoryContentCache[contentId] = content 
+                emit(Result.Success(content))
+            } else {
+                emit(Result.Error("Ошибка загрузки: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            emit(Result.Error("Исключение: ${e.message}"))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun getDownloadedTheoryContent(contentId: String): DownloadedTheoryEntity? {
+        return withContext(Dispatchers.IO) {
+            downloadedTheoryDao.getById(contentId)
+        }
+    }
 }

@@ -53,20 +53,20 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent">
 
-<!--            <com.facebook.shimmer.ShimmerFrameLayout-->
-<!--                android:id="@+id/shimmer_content_variants"-->
-<!--                android:layout_width="match_parent"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                app:shimmer_auto_start="true">-->
-<!--                <LinearLayout-->
-<!--                    android:layout_width="match_parent"-->
-<!--                    android:layout_height="wrap_content"-->
-<!--                    android:orientation="vertical">-->
-<!--                    <include layout="@layout/item_variant_placeholder" />-->
-<!--                    <include layout="@layout/item_variant_placeholder" />-->
-<!--                    <include layout="@layout/item_variant_placeholder" />-->
-<!--                </LinearLayout>-->
-<!--            </com.facebook.shimmer.ShimmerFrameLayout>-->
+            <com.facebook.shimmer.ShimmerFrameLayout
+                android:id="@+id/shimmer_content_variants"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:shimmer_auto_start="true">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <include layout="@layout/item_variant_placeholder" />
+                    <include layout="@layout/item_variant_placeholder" />
+                    <include layout="@layout/item_variant_placeholder" />
+                </LinearLayout>
+            </com.facebook.shimmer.ShimmerFrameLayout>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerViewVariants"
@@ -99,5 +99,17 @@
         app:backgroundTint="?attr/colorPrimary"
         app:tint="?attr/colorOnPrimary"
         tools:visibility="visible" />
+
+    <ProgressBar
+        android:id="@+id/progress_bar_download_variants"
+        style="?android:attr/progressBarStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/fab_download_variants"
+        app:layout_constraintBottom_toBottomOf="@id/fab_download_variants"
+        app:layout_constraintStart_toStartOf="@id/fab_download_variants"
+        app:layout_constraintEnd_toEndOf="@id/fab_download_variants"
+        tools:visibility="visible"/>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout> 

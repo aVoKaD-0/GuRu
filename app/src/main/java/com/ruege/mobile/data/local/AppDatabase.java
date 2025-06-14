@@ -26,6 +26,7 @@ import com.ruege.mobile.data.local.dao.UserVariantTaskAnswerDao;
 import com.ruege.mobile.data.local.dao.VariantTaskOptionDao;
 import com.ruege.mobile.data.local.dao.DownloadedTheoryDao;
 import com.ruege.mobile.data.local.dao.TaskTextDao;
+import com.ruege.mobile.data.local.dao.ShpargalkaDao;
 
 import com.ruege.mobile.data.local.entity.CategoryEntity;
 import com.ruege.mobile.data.local.entity.ContentEntity;
@@ -46,6 +47,7 @@ import com.ruege.mobile.data.local.entity.UserVariantTaskAnswerEntity;
 import com.ruege.mobile.data.local.entity.VariantTaskOptionEntity;
 import com.ruege.mobile.data.local.entity.DownloadedTheoryEntity;
 import com.ruege.mobile.data.local.entity.TaskTextEntity;
+import com.ruege.mobile.data.local.entity.ShpargalkaEntity;
 
 
 @Database(
@@ -68,9 +70,10 @@ import com.ruege.mobile.data.local.entity.TaskTextEntity;
         UserVariantTaskAnswerEntity.class,
         VariantTaskOptionEntity.class,
         DownloadedTheoryEntity.class,
-        TaskTextEntity.class
+        TaskTextEntity.class,
+        ShpargalkaEntity.class
     },
-    version = 19,
+    version = 20,
     exportSchema = true
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -96,51 +99,11 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract VariantTaskOptionDao variantTaskOptionDao();
     public abstract DownloadedTheoryDao downloadedTheoryDao();
     public abstract TaskTextDao taskTextDao();
+    public abstract ShpargalkaDao shpargalkaDao();
 
     private static volatile AppDatabase INSTANCE;
     private static final String DATABASE_NAME = "mobile_database.db";
     
-    // Миграция с версии 18 на 19: добавление поля variant_data в таблицу practice_statistics
-    static final Migration MIGRATION_18_19 = new Migration(18, 19) {
-        @Override
-        public void migrate(@NonNull SupportSQLiteDatabase database) {
-            try {
-                // Создаем временную таблицу с новой структурой
-                database.execSQL(
-                    "CREATE TABLE practice_statistics_temp (" +
-                    "ege_number TEXT NOT NULL PRIMARY KEY, " +
-                    "total_attempts INTEGER NOT NULL, " +
-                    "correct_attempts INTEGER NOT NULL, " +
-                    "last_attempt_date INTEGER NOT NULL, " +
-                    "variant_data TEXT)"
-                );
-
-                // Копируем данные из старой таблицы в новую
-                database.execSQL(
-                    "INSERT INTO practice_statistics_temp (ege_number, total_attempts, correct_attempts, last_attempt_date) " +
-                    "SELECT ege_number, total_attempts, correct_attempts, last_attempt_date FROM practice_statistics"
-                );
-
-                // Удаляем старую таблицу
-                database.execSQL("DROP TABLE practice_statistics");
-
-                // Переименовываем временную таблицу
-                database.execSQL("ALTER TABLE practice_statistics_temp RENAME TO practice_statistics");
-            } catch (Exception e) {
-                // В случае ошибки, создаем таблицу заново
-                database.execSQL("DROP TABLE IF EXISTS practice_statistics");
-                database.execSQL(
-                    "CREATE TABLE practice_statistics (" +
-                    "ege_number TEXT NOT NULL PRIMARY KEY, " +
-                    "total_attempts INTEGER NOT NULL, " +
-                    "correct_attempts INTEGER NOT NULL, " +
-                    "last_attempt_date INTEGER NOT NULL, " +
-                    "variant_data TEXT)"
-                );
-            }
-        }
-    };
-
     public static AppDatabase getInstance(final Context context) {
         if (INSTANCE == null) {
             synchronized (AppDatabase.class) {
@@ -150,7 +113,6 @@ public abstract class AppDatabase extends RoomDatabase {
                             AppDatabase.class,
                             DATABASE_NAME
                         )
-                        .addMigrations(MIGRATION_18_19)
                         .fallbackToDestructiveMigration()
                         .addCallback(new Callback() {
                             @Override

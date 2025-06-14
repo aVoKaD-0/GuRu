@@ -28,6 +28,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import com.ruege.mobile.data.local.dao.ShpargalkaDao
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -134,5 +135,10 @@ object DatabaseModule {
     @Provides
     fun provideSyncQueueDao(appDatabase: AppDatabase): SyncQueueDao {
         return appDatabase.syncQueueDao()
+    }
+
+    @Provides
+    fun provideShpargalkaDao(appDatabase: AppDatabase): ShpargalkaDao {
+        return appDatabase.shpargalkaDao()
     }
 } 

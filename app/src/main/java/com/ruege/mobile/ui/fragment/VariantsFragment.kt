@@ -52,6 +52,7 @@ class VariantsFragment : Fragment(), VariantAdapter.OnVariantClickListener, Vari
         binding.errorTextViewVariants.visibility = View.GONE
 
         observeVariants()
+        observeDownloadStatus()
     }
 
     private fun setupRecyclerView() {
@@ -76,10 +77,14 @@ class VariantsFragment : Fragment(), VariantAdapter.OnVariantClickListener, Vari
             viewModel.variantsState.collectLatest { resource ->
                 when (resource) {
                     is Resource.Loading -> {
+                        binding.shimmerContentVariants.startShimmer()
+                        binding.shimmerContentVariants.visibility = View.VISIBLE
                         binding.recyclerViewVariants.visibility = View.GONE
                         binding.errorTextViewVariants.visibility = View.GONE
                     }
                     is Resource.Success -> {
+                        binding.shimmerContentVariants.stopShimmer()
+                        binding.shimmerContentVariants.visibility = View.GONE
                         val items = resource.data
                         if (items != null && items.isNotEmpty()) {
                             variantAdapter.submitList(items)
@@ -94,11 +99,35 @@ class VariantsFragment : Fragment(), VariantAdapter.OnVariantClickListener, Vari
                         }
                     }
                     is Resource.Error -> {
+                        binding.shimmerContentVariants.stopShimmer()
+                        binding.shimmerContentVariants.visibility = View.GONE
                         binding.recyclerViewVariants.visibility = View.GONE
                         binding.errorTextViewVariants.text = "Ошибка загрузки: ${resource.message}"
                         binding.errorTextViewVariants.visibility = View.VISIBLE
                         binding.errorTextViewVariants.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
                     }
+                }
+            }
+        }
+    }
+
+    private fun observeDownloadStatus() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isDownloading.collectLatest { isDownloading ->
+                binding.fabDownloadVariants.isEnabled = !isDownloading
+                binding.progressBarDownloadVariants.visibility = if (isDownloading) View.VISIBLE else View.GONE
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.downloadEvent.collectLatest { resource ->
+                val message = resource.message ?: when (resource) {
+                    is Resource.Success -> "Действие выполнено успешно"
+                    is Resource.Error -> "Произошла неизвестная ошибка"
+                    else -> ""
+                }
+                if (message.isNotBlank()) {
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
                 }
             }
         }

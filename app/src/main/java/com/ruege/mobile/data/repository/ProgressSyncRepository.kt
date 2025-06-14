@@ -960,8 +960,8 @@ class ProgressSyncRepository @Inject constructor(
                 val maxTimestamp = syncResponse.lastSyncTimestamp
                 saveLastStatsSyncTimestamp(maxTimestamp)
                 Log.d(TAG, "🕒 Сохранена новая метка времени синхронизации статистики: $maxTimestamp")
-            } else if (result is Result.Failure) {
-                Log.e(TAG, "🚫 Ошибка при запросе статистики: ${result.exception.message}")
+            } else if (result is Result.Error) {
+                Log.e(TAG, "🚫 Ошибка при запросе статистики: ${result.message}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "🚫 Ошибка сети при синхронизации статистики", e)

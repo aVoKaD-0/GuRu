@@ -71,11 +71,11 @@ class PracticeSyncRepository @Inject constructor(
                 Result.Success(syncResponse)
             } else {
                 Timber.e("Ошибка полной синхронизации: ${response.code()} - ${response.message()}")
-                Result.Failure(Exception("Ошибка сервера: ${response.code()}"))
+                Result.Error("Ошибка сервера: ${response.code()}")
             }
         } catch (e: Exception) {
             Timber.e(e, "Исключение во время полной синхронизации")
-            Result.Failure(e)
+            Result.Error(e.message.toString())
         }
     }
 

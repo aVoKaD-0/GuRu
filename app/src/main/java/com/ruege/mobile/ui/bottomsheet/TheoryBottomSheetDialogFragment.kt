@@ -89,8 +89,10 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
         }
         
         downloadButton?.setOnClickListener {
+            downloadButton?.isEnabled = false // Блокируем кнопку на время операции
             contentId?.let { id ->
-                if (theoryViewModel.isTheoryDownloaded(id)) {
+                val isCurrentlyDownloaded = theoryViewModel.getDownloadedTheory(id).value != null
+                if (isCurrentlyDownloaded) {
                     theoryViewModel.deleteDownloadedTheory(id)
                 } else {
                     theoryViewModel.downloadTheory(id)
@@ -106,22 +108,29 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
     }
 
     private fun observeTheoryContent() {
+        theoryViewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if(isLoading) showLoading()
+        }
+
         theoryViewModel.theoryContent.observe(viewLifecycleOwner, Observer { theoryContentDto ->
-            if (theoryContentDto != null && theoryContentDto.id.toString() == contentId) {
-                val htmlContent = theoryContentDto.content
-                if (!htmlContent.isNullOrEmpty()) {
-                    val mainActivity = activity as? MainActivity
-                    val currentDarkTheme = mainActivity?.isDarkThemeEnabled() ?: false
-                    val styledHtml = mainActivity?.applyStylesToHtml(htmlContent, currentDarkTheme)
-                    theoryWebView?.loadDataWithBaseURL(null, styledHtml ?: htmlContent, "text/html", "UTF-8", null)
-                    showContent()
-                    Log.d(TAG_THEORY_BS, "Теория '${theoryTitle}' загружена.")
-                } else {
-                    showError("Содержимое теории пусто.")
-                    Log.w(TAG_THEORY_BS, "Содержимое теории для '${theoryTitle}' пустое.")
+            if (theoryContentDto != null) {
+                // Убедимся, что ID совпадает, или что это DTO, созданный из кеша (где ID может быть заглушкой)
+                val contentMatches = theoryContentDto.id.toString() == contentId || theoryContentDto.createdAt.isEmpty()
+                
+                if (contentMatches) {
+                    val htmlContent = theoryContentDto.content
+                    if (!htmlContent.isNullOrEmpty()) {
+                        val mainActivity = activity as? MainActivity
+                        val currentDarkTheme = mainActivity?.isDarkThemeEnabled() ?: false
+                        val styledHtml = mainActivity?.applyStylesToHtml(htmlContent, currentDarkTheme)
+                        theoryWebView?.loadDataWithBaseURL(null, styledHtml ?: htmlContent, "text/html", "UTF-8", null)
+                        showContent()
+                        Log.d(TAG_THEORY_BS, "Теория '${theoryTitle}' загружена.")
+                    } else {
+                        showError("Содержимое теории пусто.")
+                        Log.w(TAG_THEORY_BS, "Содержимое теории для '${theoryTitle}' пустое.")
+                    }
                 }
-            } else if (theoryContentDto == null && contentId != null) {
-                 Log.d(TAG_THEORY_BS, "theoryContentDto is null, ожидаем загрузки для $contentId")
             }
         })
     }
@@ -150,7 +159,8 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     downloadButton?.isEnabled = true
                     Toast.makeText(requireContext(), "Ошибка скачивания: ${resource.message}", Toast.LENGTH_LONG).show()
                 }
-            }
+                else -> { Log.d("TheoryBottomSheetDialogFragment", "Ошибка в TheoryBottomSHeetDialogFragment.kt") }
+            } 
         }
     }
 
@@ -169,6 +179,7 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
                     downloadButton?.isEnabled = true
                     Toast.makeText(requireContext(), "Ошибка удаления: ${resource.message}", Toast.LENGTH_LONG).show()
                 }
+                else -> { Log.d("TheoryBottomSheetDialogFragment", "Ошибка в TheoryBottomSHeetDialogFragment.kt2") }
             }
         }
     }

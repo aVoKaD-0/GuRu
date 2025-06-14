@@ -167,14 +167,17 @@
          */
         fun syncInitialContent() {
             viewModelScope.launch {
-                Log.d(TAG, "Syncing initial content...")
+                Timber.d("LOG_CHAIN: ContentViewModel.syncInitialContent - Начало синхронизации.")
                 try {
+                    Timber.d("LOG_CHAIN: ContentViewModel.syncInitialContent - Вызов contentRepository.refreshTheoryTopics()")
                     contentRepository.refreshTheoryTopics()
+                    Timber.d("LOG_CHAIN: ContentViewModel.syncInitialContent - Вызов contentRepository.refreshEssayTopics()")
                     contentRepository.refreshEssayTopics()
+                    Timber.d("LOG_CHAIN: ContentViewModel.syncInitialContent - Вызов contentRepository.refreshTasksTopics()")
                     contentRepository.refreshTasksTopics()
-                    Timber.d("Initial content sync finished.")
+                    Timber.d("LOG_CHAIN: ContentViewModel.syncInitialContent - Initial content sync finished.")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error syncing initial content: ${e.message}", e)
+                    Timber.e(e, "LOG_CHAIN: ContentViewModel.syncInitialContent - Ошибка: ${e.message}")
                     _theoryItemsState.postValue(Resource.Error("Ошибка синхронизации", _theoryItemsState.value?.data))
                     _taskItemsState.postValue(Resource.Error("Ошибка синхронизации", _taskItemsState.value?.data))
                 }
@@ -345,10 +348,10 @@
                                 hasMoreTasksByCategory[categoryId] = hasMore
                                 _hasMoreTasksToLoad.value = hasMore
                             }
-                            is Result.Failure -> {
-                                val error = result.exception
-                                Log.e(TAG, "Ошибка при загрузке заданий для категории $categoryId", error)
-                                _errorMessage.value = "Ошибка загрузки заданий: ${error.message}"
+                            is Result.Error -> {
+                                val error = result.message
+                                Timber.e(TAG, "Ошибка при загрузке заданий для категории $categoryId" + error)
+                                _errorMessage.value = "Ошибка загрузки заданий: ${error}"
                             }
                             is Result.Loading -> {
                                  _isLoading.value = true 
@@ -483,13 +486,13 @@
                                 _isLoading.value = false 
                                 _isLoadingTaskDetails[formattedId] = false 
                             }
-                            is Result.Failure -> {
-                                val e = result.exception 
+                            is Result.Error -> {
+                                val e = result.message
                                 Timber.e(e, "Ошибка при загрузке задания с ID: $formattedId")
-                                if (e?.message == ContentRepository.NO_DATA_AND_NETWORK_ISSUE_FLAG) {
+                                if (e == ContentRepository.NO_DATA_AND_NETWORK_ISSUE_FLAG) {
                                     _errorMessage.value = "Не удалось загрузить задание. Проверьте подключение к интернету или попробуйте позже. Если проблема останется, отпишитесь в поддержку :)"
                                 } else {
-                                    _errorMessage.value = e?.message ?: "Произошла ошибка при загрузке задания"
+                                    _errorMessage.value = e ?: "Произошла ошибка при загрузке задания"
                                 }
                                 _isLoading.value = false 
                                 _isLoadingTaskDetails[formattedId] = false 
@@ -533,8 +536,8 @@
                                 taskDetailCache[taskId] = fetchedTask 
                                 processAnswer(fetchedTask, userAnswer)
                             }
-                            is Result.Failure -> {
-                                Timber.e(result.exception, "Ошибка при загрузке деталей задания $taskId для проверки ответа.")
+                            is Result.Error -> {
+                                Timber.e(result.message, "Ошибка при загрузке деталей задания $taskId для проверки ответа.")
                                 _errorMessage.value = "Ошибка получения данных для проверки ответа."
                     _isLoading.value = false
                             }
@@ -662,9 +665,9 @@
                                 val taskItem = result.data
                                 Timber.d("DEBUG getTaskDetail: ID=${taskItem.taskId}, correctAnswer=${taskItem.correctAnswer}, explanation=${taskItem.explanation}")
                             }
-                            is Result.Failure -> {
-                                val error = result.exception
-                                Timber.e(error, "DEBUG: Ошибка при получении задания из репозитория для ID=$taskId")
+                            is Result.Error -> {
+                                val error = result
+                                Timber.e(error.message, "DEBUG: Ошибка при получении задания из репозитория для ID=$taskId")
                             }
                             is Result.Loading -> {
                             }
@@ -734,9 +737,9 @@
                                     hasMoreTasksByCategory[categoryId] = false
                                 }
                             }
-                            is Result.Failure -> {
-                                val throwable = result.exception
-                                Timber.e(throwable, "Ошибка при загрузке дополнительных заданий для категории $categoryId")
+                            is Result.Error -> {
+                                val throwable = result
+                                Timber.e(throwable.message, "Ошибка при загрузке дополнительных заданий для категории $categoryId")
                                 _errorMessage.value = "Не удалось загрузить дополнительные задания: ${throwable?.message ?: "неизвестная ошибка"}"
                             }
                             is Result.Loading -> {
@@ -855,8 +858,8 @@
                                     _taskAdditionalTextLoading.value = false
                                 }
                             }
-                            is Result.Failure -> {
-                                Timber.e(detailResult.exception, "Ошибка при загрузке деталей задания $taskId для получения textId.")
+                            is Result.Error -> {
+                                Timber.e(detailResult.message, "Ошибка при загрузке деталей задания $taskId для получения textId.")
                                 _taskAdditionalTextError.value = "Не удалось получить информацию для дополнительного текста."
                                 _taskAdditionalTextLoading.value = false
                             }
@@ -909,9 +912,9 @@
                         _taskAdditionalText.value = textContent
                         Timber.d("Дополнительный текст для textId $textId успешно загружен и закэширован.")
                     }
-                    is Result.Failure -> {
-                        Timber.e(textResult.exception, "Ошибка загрузки дополнительного текста для textId $textId.")
-                        _taskAdditionalTextError.value = "Ошибка загрузки текста: ${textResult.exception?.message}"
+                    is Result.Error -> {
+                        Timber.e(textResult.message, "Ошибка загрузки дополнительного текста для textId $textId.")
+                        _taskAdditionalTextError.value = "Ошибка загрузки текста: ${textResult.message}"
                     }
                     Result.Loading -> {  }
                 }

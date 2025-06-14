@@ -26,15 +26,26 @@ import kotlinx.coroutines.flow.map
 import com.ruege.mobile.data.network.dto.UserAnswerPayloadDto
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 @HiltViewModel
 class VariantViewModel @Inject constructor(
     private val variantRepository: VariantRepository
 ) : ViewModel() {
 
-    private val _variantsState = MutableStateFlow<Resource<List<VariantEntity>>>(Resource.Loading())
-    val variantsState: StateFlow<Resource<List<VariantEntity>>> = _variantsState.asStateFlow()
-    val variantsLiveData: LiveData<Resource<List<VariantEntity>>> = _variantsState.asLiveData()
+    private val _uiState = MutableStateFlow<Resource<List<VariantEntity>>>(Resource.Loading())
+    val variantsState: StateFlow<Resource<List<VariantEntity>>> = _uiState.asStateFlow()
+
+    private val localVariantsState = MutableStateFlow<List<VariantEntity>>(emptyList())
+
+    private val _isDownloading = MutableStateFlow(false)
+    val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
+
+    private val _downloadEvent = MutableSharedFlow<Resource<String>>()
+    val downloadEvent: SharedFlow<Resource<String>> = _downloadEvent.asSharedFlow()
 
     private val _variantDetailsState = MutableStateFlow<Resource<VariantEntity>>(Resource.Loading())
     val variantDetailsState: StateFlow<Resource<VariantEntity>> = _variantDetailsState.asStateFlow()
@@ -58,76 +69,103 @@ class VariantViewModel @Inject constructor(
     val selectedVariants: StateFlow<Set<Int>> = _selectedVariants.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            variantRepository.getVariants()
+                .combine(localVariantsState) { resource, localState ->
+                    when (resource) {
+                        is Resource.Success -> {
+                            val dbVariants = resource.data ?: emptyList()
+                            val localStateMap = localState.associateBy { it.variantId }
+                            val mergedList = dbVariants.map { dbVariant ->
+                                dbVariant.copy(isSelected = localStateMap[dbVariant.variantId]?.isSelected ?: false)
+                            }
+                            localVariantsState.value = mergedList
+                            Resource.Success(mergedList)
+                        }
+                        is Resource.Error -> {
+                            if (localVariantsState.value.isEmpty()) resource else Resource.Success(localVariantsState.value)
+                        }
+                        is Resource.Loading -> {
+                            if (localVariantsState.value.isEmpty()) Resource.Loading() else Resource.Success(localVariantsState.value)
+                        }
+                    }
+                }
+                .collect { combinedResource ->
+                    _uiState.value = combinedResource
+                }
+        }
         fetchVariants()
     }
 
-    fun fetchVariants() {
-        viewModelScope.launch {
-            variantRepository.getVariants().collect { resource ->
-                val currentState = _variantsState.value
-                if (currentState is Resource.Loading && resource is Resource.Success && resource.data.isNullOrEmpty()) {
-                    return@collect
-                }
-                _variantsState.value = resource
-            }
-        }
+    private fun fetchVariants() {
         viewModelScope.launch {
             try {
                 variantRepository.fetchVariantsFromServer()
+                if (_uiState.value is Resource.Loading) {
+                    _uiState.value = Resource.Success(emptyList())
+                }
             } catch (e: Exception) {
                 Log.e("ViewModel", "Error fetching variants", e)
-                if (_variantsState.value !is Resource.Success || _variantsState.value?.data.isNullOrEmpty()) {
-                    _variantsState.value = Resource.Error("Ошибка загрузки вариантов: ${e.message}", null)
+                if (_uiState.value.data.isNullOrEmpty()) {
+                    _uiState.value = Resource.Error("Ошибка загрузки вариантов: ${e.message}", null)
                 }
             }
         }
     }
 
     fun toggleVariantSelection(variantId: Int, isSelected: Boolean) {
-        _variantsState.update { currentState ->
-            if (currentState is Resource.Success) {
-                val updatedList = currentState.data?.map { variant ->
-                    if (variant.variantId == variantId) {
-                        variant.copy(isSelected = isSelected)
-                    } else {
-                        variant
-                    }
+        localVariantsState.update { currentList ->
+            currentList.map { variant ->
+                if (variant.variantId == variantId) {
+                    variant.copy(isSelected = isSelected)
+                } else {
+                    variant
                 }
-                Resource.Success(updatedList ?: emptyList())
-            } else {
-                currentState
             }
         }
     }
 
     fun selectAllVariants(selectAll: Boolean) {
-        _variantsState.update { currentState ->
-            if (currentState is Resource.Success) {
-                val updatedList = currentState.data?.map { it.copy(isSelected = selectAll) }
-                Resource.Success(updatedList ?: emptyList())
-            } else {
-                currentState
-            }
+        localVariantsState.update { currentList ->
+            currentList.map { it.copy(isSelected = selectAll) }
         }
     }
 
     fun downloadSelectedVariants() {
         viewModelScope.launch {
-            val selectedVariantIds = _variantsState.value.data
-                ?.filter { it.isSelected && !it.isDownloaded }
-                ?.map { it.variantId } ?: emptyList()
-
+            val selectedVariantIds = localVariantsState.value
+                .filter { it.isSelected && !it.isDownloaded }
+                .map { it.variantId }
+                
             if (selectedVariantIds.isEmpty()) {
                 Log.d("ViewModel", "Нет выбранных вариантов для скачивания.")
                 return@launch
             }
 
+            _isDownloading.value = true
+            var successfulDownloads = 0
+            var lastError: String? = null
+
             Log.d("ViewModel", "Скачивание вариантов: $selectedVariantIds")
             selectedVariantIds.forEach { variantId ->
-                variantRepository.fetchAndSaveVariantDetails(variantId)
-                variantRepository.updateVariantDownloadedStatus(variantId, true)
+                val result = variantRepository.fetchAndSaveVariantDetails(variantId)
+                if (result is Resource.Success) {
+                    variantRepository.updateVariantDownloadedStatus(variantId, true)
+                    successfulDownloads++
+                } else {
+                    lastError = result.message ?: "Неизвестная ошибка"
+                }
             }
+            
+            _isDownloading.value = false
             selectAllVariants(false)
+
+            if (lastError != null) {
+                val failedCount = selectedVariantIds.size - successfulDownloads
+                _downloadEvent.emit(Resource.Error("Не удалось скачать $failedCount из ${selectedVariantIds.size} вариантов. Ошибка: $lastError"))
+            } else {
+                _downloadEvent.emit(Resource.Success("Успешно скачано $successfulDownloads вариантов."))
+            }
         }
     }
 

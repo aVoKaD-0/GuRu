@@ -37,6 +37,7 @@ import com.ruege.mobile.data.local.dao.PracticeAttemptDao
 import com.ruege.mobile.data.local.dao.PracticeStatisticsDao
 import com.ruege.mobile.data.local.dao.ProgressDao
 import com.ruege.mobile.data.local.dao.ProgressSyncQueueDao
+import com.ruege.mobile.data.local.dao.ShpargalkaDao
 import com.ruege.mobile.data.network.api.ProgressApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -63,12 +64,10 @@ object RepositoryModule {
     @Singleton
     fun provideShpargalkaRepository(
         shpargalkiApiService: ShpargalkiApiService,
-        contentDao: ContentDao,
-        categoryDao: CategoryDao,
-        appDatabase: AppDatabase,
+        shpargalkaDao: ShpargalkaDao,
         @ApplicationContext context: Context
     ): ShpargalkaRepository {
-        return ShpargalkaRepository(shpargalkiApiService, contentDao, categoryDao, appDatabase, context)
+        return ShpargalkaRepository(shpargalkiApiService, shpargalkaDao, context)
     }
 
     @Provides
@@ -81,7 +80,8 @@ object RepositoryModule {
         essayApiService: EssayApiService,
         downloadedTheoryDao: DownloadedTheoryDao,
         taskTextDao: TaskTextDao,
-        externalScope: CoroutineScope
+        externalScope: CoroutineScope,
+        userDao: UserDao
     ): ContentRepository {
         return ContentRepository(
             contentDao,
@@ -91,7 +91,8 @@ object RepositoryModule {
             essayApiService,
             downloadedTheoryDao,
             taskTextDao,
-            externalScope
+            externalScope,
+            userDao
         )
     }
 

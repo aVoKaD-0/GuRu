@@ -40,7 +40,6 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         observeShpargalkaState()
-        viewModel.loadShpargalkaItems()
     }
 
     private fun setupRecyclerView() {

@@ -17,7 +17,7 @@ class GoogleAuthManager(private val context: Context) {
     private fun setupGoogleSignIn() {
         try {
             val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                .requestIdToken("...")
+                .requestIdToken("28825475540-qkcpiir0hr7sjiivcoccq09fvtooi7po.apps.googleusercontent.com")
                 .requestEmail()
                 .build()
             
