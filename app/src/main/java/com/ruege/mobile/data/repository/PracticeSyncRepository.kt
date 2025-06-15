@@ -9,7 +9,6 @@ import com.ruege.mobile.data.network.dto.request.PracticeAttemptSyncDto
 import com.ruege.mobile.data.network.dto.request.PracticeStatisticSyncDto
 import com.ruege.mobile.data.repository.Result
 import com.ruege.mobile.data.network.dto.response.PracticeStatisticsGetResponse
-import com.ruege.mobile.data.mapper.toEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -34,32 +33,34 @@ class PracticeSyncRepository @Inject constructor(
             if (response.isSuccessful && response.body() != null) {
                 val syncResponse = response.body()!!
                 Timber.d("Сервер ответил, начинаем обновление локальной БД...")
+                Timber.d("Raw DTOs from Moshi: ${syncResponse.statistics}")
 
                 val serverStats = syncResponse.statistics.map { it.toEntity() }
+                Timber.d("Entities after mapping: ${serverStats.joinToString { stat -> "[egeNumber=${stat.egeNumber}]" }}")
                 
                 try {
                     val localStatsMap = practiceStatisticsDao.getAllStatisticsSortedByEgeNumber().first().associateBy { it.egeNumber }
                     val statsToUpdate = mutableListOf<PracticeStatisticsEntity>()
-                    val statsToInsert = mutableListOf<PracticeStatisticsEntity>()
 
                     for (serverStat in serverStats) {
                         val localStat = localStatsMap[serverStat.egeNumber]
-                        if (localStat != null) {
+                        if (localStat == null) {
+                            statsToUpdate.add(serverStat)
+                        } else {
                             if (serverStat.lastAttemptDate > localStat.lastAttemptDate) {
                                 statsToUpdate.add(serverStat)
                             }
-                        } else {
-                            statsToInsert.add(serverStat)
                         }
                     }
 
-                    if (statsToInsert.isNotEmpty()) {
-                        practiceStatisticsDao.insertAll(statsToInsert)
-                        Timber.d("Вставлено ${statsToInsert.size} новых записей статистики.")
+                    Timber.d("Содержимое списка statsToUpdate перед вставкой в БД (${statsToUpdate.size} элементов):")
+                    statsToUpdate.forEachIndexed { index, stat ->
+                        Timber.d("  [$index]: egeNumber='${stat.egeNumber}', totalAttempts=${stat.totalAttempts}, correctAttempts=${stat.correctAttempts}, lastAttemptDate=${stat.lastAttemptDate}, variantData=${stat.variantData?.length ?: "null"} chars")
                     }
+
                     if (statsToUpdate.isNotEmpty()) {
-                        practiceStatisticsDao.updateAll(statsToUpdate)
-                        Timber.d("Обновлено ${statsToUpdate.size} записей статистики.")
+                        practiceStatisticsDao.insertAll(statsToUpdate)
+                        Timber.d("Вставлено/обновлено ${statsToUpdate.size} записей статистики.")
                     }
 
                 } catch (e: Exception) {
@@ -93,13 +94,14 @@ class PracticeSyncRepository @Inject constructor(
         attemptDate = this.attemptDate
     )
 
-    private fun com.ruege.mobile.data.network.dto.response.PracticeStatisticSyncResponseDto.toEntity(): PracticeStatisticsEntity {
-        return PracticeStatisticsEntity(
-            this.egeNumber,
-            this.totalAttempts,
-            this.correctAttempts,
-            this.lastAttemptDate
-        )
+    private fun PracticeStatisticSyncDto.toEntity(): PracticeStatisticsEntity {
+        return PracticeStatisticsEntity().apply {
+            egeNumber = this@toEntity.egeNumber
+            totalAttempts = this@toEntity.totalAttempts
+            correctAttempts = this@toEntity.correctAttempts
+            lastAttemptDate = this@toEntity.lastAttemptDate
+            variantData = null
+        }
     }
 
     private fun com.ruege.mobile.data.network.dto.response.PracticeAttemptSyncResponseDto.toEntity(): PracticeAttemptEntity {

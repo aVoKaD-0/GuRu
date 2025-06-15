@@ -1,6 +1,7 @@
 package com.ruege.mobile.data.local.entity;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.room.ColumnInfo;
 import androidx.room.Entity;
 import androidx.room.Ignore;
@@ -23,6 +24,7 @@ public class PracticeStatisticsEntity {
     @ColumnInfo(name = "last_attempt_date")
     private long lastAttemptDate;
     
+    @Nullable
     @ColumnInfo(name = "variant_data")
     private String variantData;
 
@@ -41,7 +43,7 @@ public class PracticeStatisticsEntity {
     
     @Ignore
     public PracticeStatisticsEntity(@NonNull String egeNumber, int totalAttempts, 
-                                    int correctAttempts, long lastAttemptDate, String variantData) {
+                                    int correctAttempts, long lastAttemptDate, @Nullable String variantData) {
         this.egeNumber = egeNumber;
         this.totalAttempts = totalAttempts;
         this.correctAttempts = correctAttempts;
@@ -66,6 +68,7 @@ public class PracticeStatisticsEntity {
         return lastAttemptDate;
     }
     
+    @Nullable
     public String getVariantData() {
         return variantData;
     }
@@ -86,7 +89,7 @@ public class PracticeStatisticsEntity {
         this.lastAttemptDate = lastAttemptDate;
     }
     
-    public void setVariantData(String variantData) {
+    public void setVariantData(@Nullable String variantData) {
         this.variantData = variantData;
     }
 

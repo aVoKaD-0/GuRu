@@ -106,6 +106,10 @@ class PracticeRepository(
         practiceStatisticsDao.getStatisticsWithAttempts().collect { emit(it ?: emptyList()) }
     }
 
+    fun getVariantStatistics(): LiveData<List<PracticeStatisticsEntity>> = liveData(Dispatchers.IO) {
+        practiceStatisticsDao.getVariantStatistics().collect { emit(it ?: emptyList()) }
+    }
+
     /**
      * Получает задание по его идентификатору
      * @param taskId идентификатор задания

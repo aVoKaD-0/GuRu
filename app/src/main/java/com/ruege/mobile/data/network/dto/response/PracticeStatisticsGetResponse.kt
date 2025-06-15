@@ -13,7 +13,7 @@ data class PracticeStatisticsGetResponse(
     @field:Json(name = "last_sync_timestamp")
     val lastSyncTimestamp: Long,
     @field:Json(name = "aggregated_statistics")
-    val statistics: List<PracticeStatisticSyncResponseDto>,
+    val statistics: List<com.ruege.mobile.data.network.dto.request.PracticeStatisticSyncDto>,
     @field:Json(name = "recent_attempts")
     val attempts: List<PracticeAttemptSyncResponseDto>
 ) 

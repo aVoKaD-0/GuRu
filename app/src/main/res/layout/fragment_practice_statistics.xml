@@ -141,6 +141,11 @@
             android:layout_height="wrap_content"
             android:text="Последние попытки" />
 
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="По вариантам" />
+
     </com.google.android.material.tabs.TabLayout>
 
     <!-- ViewPager2 для содержимого вкладок -->

@@ -70,24 +70,22 @@ class TheoryViewModel @Inject constructor(
             Timber.d("Загрузка контента для теории: $contentId")
 
             try {
-                // 1. Попробовать загрузить из локальной базы
                 val downloadedTheory = contentRepository.getDownloadedTheoryContent(contentId)
                 if (downloadedTheory != null) {
                     Timber.d("Найдена скачанная теория для $contentId. Отображение из БД.")
                     val theoryDto = TheoryContentDto(
-                        id = contentId.hashCode(), // Это поле не используется, но нужно для DTO
-                        egeNumber = 0, // Аналогично
+                        id = contentId.hashCode(),
+                        egeNumber = 0, 
                         title = downloadedTheory.title,
                         content = downloadedTheory.htmlContent,
-                        createdAt = "", // Аналогично
-                        updatedAt = "" // Аналогично
+                        createdAt = "",
+                        updatedAt = "" 
                     )
                     _theoryContent.value = theoryDto
                     _isLoading.value = false
                     return@launch
                 }
 
-                // 2. Если в локальной базе нет, идем в сеть
                 Timber.d("Скачанная теория для $contentId не найдена, загрузка из сети.")
                 val theoryDto = contentRepository.getTheoryContentById(contentId)
                 _isLoading.value = false

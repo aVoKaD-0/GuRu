@@ -89,7 +89,7 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
         }
         
         downloadButton?.setOnClickListener {
-            downloadButton?.isEnabled = false // Блокируем кнопку на время операции
+            downloadButton?.isEnabled = false 
             contentId?.let { id ->
                 val isCurrentlyDownloaded = theoryViewModel.getDownloadedTheory(id).value != null
                 if (isCurrentlyDownloaded) {
@@ -114,7 +114,6 @@ class TheoryBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
         theoryViewModel.theoryContent.observe(viewLifecycleOwner, Observer { theoryContentDto ->
             if (theoryContentDto != null) {
-                // Убедимся, что ID совпадает, или что это DTO, созданный из кеша (где ID может быть заглушкой)
                 val contentMatches = theoryContentDto.id.toString() == contentId || theoryContentDto.createdAt.isEmpty()
                 
                 if (contentMatches) {

@@ -155,7 +155,6 @@
             }
 
             tasksTopicsLiveData.observeForever { entities ->
-                // Сортируем задания по orderPosition перед отображением в UI
                 val sortedEntities = entities.sortedBy { it.orderPosition }
                 _taskItemsState.value = Resource.Success(sortedEntities.map { it.toContentItem() })
             }
@@ -200,9 +199,7 @@
         fun loadTasksTopicsOnly() {
             val currentData = _taskItemsState.value?.data
             if (currentData != null) {
-                // Сортируем задания по orderPosition перед отображением
                 val sortedData = currentData.sortedBy { 
-                    // Извлекаем номер задания из contentId для сортировки
                     try {
                         val egeNumber = it.contentId.replace("task_group_", "")
                         egeNumber.toInt()
@@ -994,7 +991,6 @@
                     contentRepository.refreshTasksTopics()
                     Timber.d("Force refresh for task topics initiated successfully")
                     
-                    // После обновления данных, получаем их и сортируем
                     val entities = contentRepository.getTasksTopicsStream().first()
                     val sortedEntities = entities.sortedBy { it.orderPosition }
                     _taskItemsState.value = Resource.Success(sortedEntities.map { it.toContentItem() })

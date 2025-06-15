@@ -63,6 +63,7 @@ class PracticeStatisticsFragment : Fragment() {
             tab.text = when (position) {
                 0 -> "По номерам"
                 1 -> "Последние попытки"
+                2 -> "По вариантам"
                 else -> "Статистика"
             }
         }.attach()

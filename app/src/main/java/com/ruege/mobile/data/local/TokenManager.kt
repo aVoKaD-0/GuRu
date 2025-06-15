@@ -38,9 +38,7 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             return existingKey?.secretKey ?: generateSecretKey()
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка получения ключа из KeyStore: ${e.message}", e)
-            // Если возникла ошибка при получении ключа, пробуем пересоздать его
             try {
-                // Удаляем старый ключ, если он существует
                 if (keyStore.containsAlias(KEY_ALIAS)) {
                     keyStore.deleteEntry(KEY_ALIAS)
                     Log.d(TAG, "Старый ключ удален из KeyStore")
@@ -96,7 +94,6 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Ошибка дешифрования: ${e.javaClass.simpleName} - ${e.message}", e)
             
-            // При ошибке дешифрования пробуем пересоздать ключ и очистить данные
             if (e.message?.contains("Signature/MAC verification failed") == true || 
                 e.javaClass.simpleName == "AEADBadTagException") {
                 Log.d(TAG, "Обнаружена ошибка верификации MAC, пробуем пересоздать ключ")
@@ -105,7 +102,6 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
                         keyStore.deleteEntry(KEY_ALIAS)
                         Log.d(TAG, "Ключ удален из-за ошибки верификации")
                     }
-                    // Генерируем новый ключ
                     generateSecretKey()
                 } catch (e2: Exception) {
                     Log.e(TAG, "Ошибка при пересоздании ключа: ${e2.message}", e2)
@@ -209,7 +205,6 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
             remove(KEY_ACCESS_TOKEN_EXPIRES_AT) 
         }
         
-        // При очистке токенов также пересоздаем ключ шифрования
         try {
             if (keyStore.containsAlias(KEY_ALIAS)) {
                 keyStore.deleteEntry(KEY_ALIAS)

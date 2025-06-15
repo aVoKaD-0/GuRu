@@ -35,7 +35,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import com.ruege.mobile.data.local.dao.UserDao
 import com.ruege.mobile.data.local.entity.PracticeStatisticsEntity
-import com.ruege.mobile.data.mapper.toEntity
 import com.ruege.mobile.data.local.dao.PracticeStatisticsDao
 import com.ruege.mobile.data.network.api.PracticeApiService
 import com.ruege.mobile.data.repository.Result

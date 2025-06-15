@@ -87,7 +87,6 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
                     binding.errorTextViewShpargalka.visibility = View.VISIBLE
                     binding.errorTextViewShpargalka.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
                     
-                    // Если есть старые данные, показываем их
                     val staleData = resource.data
                     if (staleData != null && staleData.isNotEmpty()) {
                         contentAdapter.submitList(staleData)
@@ -96,7 +95,6 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
                     }
                 }
                 else -> {
-                    // Обработка для любых других возможных состояний
                     binding.shimmerContentShpargalka.stopShimmer()
                     binding.shimmerContentShpargalka.visibility = View.GONE
                     binding.recyclerViewShpargalka.visibility = View.GONE

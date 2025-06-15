@@ -54,14 +54,17 @@ public interface PracticeStatisticsDao {
     @Query("SELECT * FROM practice_statistics ORDER BY last_attempt_date DESC")
     Flow<List<PracticeStatisticsEntity>> getAllStatisticsByRecentActivity();
 
-    @Query("SELECT * FROM practice_statistics WHERE total_attempts > 0")
+    @Query("SELECT * FROM practice_statistics WHERE total_attempts > 0 AND ege_number NOT LIKE '%#_%' ESCAPE '#'")
     Flow<List<PracticeStatisticsEntity>> getStatisticsWithAttempts();
 
-    @Query("SELECT * FROM practice_statistics ORDER BY CAST(ege_number AS INTEGER) ASC")
+    @Query("SELECT * FROM practice_statistics WHERE ege_number NOT LIKE '%#_%' ESCAPE '#' ORDER BY CAST(ege_number AS INTEGER) ASC")
     Flow<List<PracticeStatisticsEntity>> getAllStatisticsSortedByEgeNumber();
 
     @Query("SELECT SUM(total_attempts) as total_sum_attempts, SUM(correct_attempts) as total_sum_correct_attempts FROM practice_statistics")
     Flow<AggregatedPracticeStatistics> getOverallAggregatedStatistics();
+
+    @Query("SELECT * FROM practice_statistics WHERE ege_number LIKE '%#_%' ESCAPE '#' ORDER BY last_attempt_date DESC")
+    Flow<List<PracticeStatisticsEntity>> getVariantStatistics();
 
     @Query("DELETE FROM practice_statistics")
     void clearAllStatistics();

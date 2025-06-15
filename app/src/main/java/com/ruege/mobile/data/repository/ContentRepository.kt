@@ -378,7 +378,6 @@ class ContentRepository @Inject constructor(
         val actualCategoryId = categoryId.replace("task_group_", "")
         Timber.d("Запрос заданий для категории: $categoryId (ID для API: $actualCategoryId), страница: $page")
 
-        // Проверяем кеш по обоим возможным ключам - с префиксом и без
         val cachedTasks = tasksCategoryCache[categoryId] ?: tasksCategoryCache[actualCategoryId]
         if (page == 1 && cachedTasks != null) {
             Timber.d("Категория $categoryId найдена в кэше. Возвращаем ${cachedTasks.size} заданий.")
@@ -392,7 +391,6 @@ class ContentRepository @Inject constructor(
                 Timber.d("Найдено ${localTasks.size} скачанных заданий в БД для категории $actualCategoryId. Пагинация для этой категории будет отключена.")
                 val taskItems = localTasks.map { it.toTaskItem() }.sortedBy { it.orderPosition }
                 
-                // Сохраняем в кеш с полным ID (с префиксом)
                 tasksCategoryCache[categoryId] = taskItems
                 hasMoreItemsMap[categoryId] = false
                 emit(Result.Success(taskItems))
@@ -422,7 +420,6 @@ class ContentRepository @Inject constructor(
                     val taskItems = taskDtos.map { it.toTaskItem() }.sortedBy { it.orderPosition }
                     
                     if (page == 1) {
-                        // Сохраняем в кеш с полным ID (с префиксом)
                         tasksCategoryCache[categoryId] = taskItems
                     }
                     
@@ -610,7 +607,6 @@ class ContentRepository @Inject constructor(
                     
                     val additionalTaskItems = taskDtos.map { it.toTaskItem() }
                     
-                    // Используем полный ID категории с префиксом для кеширования
                     val existingTasks = tasksCategoryCache[categoryId] ?: emptyList()
                     tasksCategoryCache[categoryId] = (existingTasks + additionalTaskItems).sortedBy { it.orderPosition }
                     
@@ -684,7 +680,6 @@ class ContentRepository @Inject constructor(
     }
 
     private fun TaskDto.toTaskItem(): TaskItem {
-        // Получаем порядковый номер из номера задания ЕГЭ
         val orderPosition = try {
             this.egeNumber.toInt()
         } catch (e: NumberFormatException) {
@@ -710,7 +705,6 @@ class ContentRepository @Inject constructor(
     }
 
     private fun TaskEntity.toTaskItem(): TaskItem {
-        // Получаем порядковый номер из номера задания ЕГЭ
         val orderPosition = try {
             this.egeNumber.toInt()
         } catch (e: NumberFormatException) {
@@ -738,7 +732,6 @@ class ContentRepository @Inject constructor(
     private fun TaskEntity.toTaskItemWithText(textDto: com.ruege.mobile.data.network.dto.response.TextDataDto?): TaskItem {
         val contentHtml = this.taskText ?: ""
         
-        // Получаем порядковый номер из номера задания ЕГЭ
         val orderPosition = try {
             this.egeNumber.toInt()
         } catch (e: NumberFormatException) {
@@ -829,7 +822,6 @@ class ContentRepository @Inject constructor(
                     val title = "Задание $egeNumber"
                     val description = "${taskDtos.size} заданий"
                     
-                    // Преобразуем номер задания в позицию для сортировки
                     val orderPosition = try {
                         egeNumber.toInt()
                     } catch (e: NumberFormatException) {
@@ -842,11 +834,10 @@ class ContentRepository @Inject constructor(
                         description,
                         "task_group",
                         null,
-                        true,  // Устанавливаем флаг isDownloaded
+                        true,  
                         false,
                         egeNumber.toInt()
                     )
-                    // Устанавливаем порядковый номер для сортировки
                     contentEntity.setOrderPosition(orderPosition)
                     
                     contentDao.insert(contentEntity)
@@ -897,8 +888,6 @@ class ContentRepository @Inject constructor(
 
     fun getTheoryContent(contentId: String): Flow<Result<TheoryContentDto>> = flow {
         emit(Result.Loading)
-        
-        // Сначала проверяем кэш
         val cachedContent = theoryContentCache[contentId]
         if (cachedContent != null) {
             emit(Result.Success(cachedContent))

@@ -64,30 +64,35 @@ class PracticeStatisticsRepository @Inject constructor(
     }
 
     /**
+     * Сохраняет статистику по варианту.
+     */
+    suspend fun saveVariantStatistics(statistics: PracticeStatisticsEntity) {
+        withContext(Dispatchers.IO) {
+            practiceStatisticsDao.insert(statistics)
+            progressSyncRepository.queueStatisticsUpdate(statistics, false)
+            Log.d("PracticeStatsRepo", "Saved variant statistics for ${statistics.egeNumber} and queued for sync")
+        }
+    }
+
+    /**
      * Обновляет данные варианта в статистике для указанного номера ЕГЭ
      */
     suspend fun updateVariantData(egeNumber: String, variantResult: VariantResult) {
         withContext(Dispatchers.IO) {
             try {
-                // Создаем запись статистики, если её еще нет
                 practiceStatisticsDao.createStatisticsIfNotExists(egeNumber)
                 
-                // Получаем текущую статистику
                 val currentStats = practiceStatisticsDao.getStatisticsByEgeNumberSync(egeNumber)
                 
                 if (currentStats != null) {
-                    // Преобразуем результаты варианта в JSON строку
                     val variantDataJson = variantResult.toJsonString()
                     
-                    // Обновляем поле variant_data в статистике
                     currentStats.variantData = variantDataJson
                     
-                    // Сохраняем обновленную статистику
                     practiceStatisticsDao.update(currentStats)
                     
                     Log.d("PracticeStatsRepo", "Variant data updated for egeNumber: $egeNumber")
                     
-                    // Помечаем для синхронизации
                     progressSyncRepository.queueStatisticsUpdate(currentStats, false)
                 } else {
                     Log.w("PracticeStatsRepo", "Failed to update variant data - statistics not found for egeNumber: $egeNumber")
@@ -107,10 +112,9 @@ class PracticeStatisticsRepository @Inject constructor(
             try {
                 val stats = practiceStatisticsDao.getStatisticsByEgeNumberSync(egeNumber)
                 if (stats != null && !stats.variantData.isNullOrEmpty()) {
-                    // Преобразуем JSON строку в объект VariantResult
                     VariantResult.fromJsonString(
                         stats.variantData!!,
-                        "", // ID варианта неизвестен из хранимых данных
+                        "", 
                         stats.lastAttemptDate
                     )
                 } else {

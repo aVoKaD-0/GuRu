@@ -47,7 +47,18 @@ class StatisticsAdapter(
         private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
 
         fun bind(statistics: PracticeStatisticsEntity) {
-            tvEgeNumber.text = "Задание ${statistics.egeNumber}"
+            if (statistics.egeNumber.contains("_")) {
+                val variantName = statistics.egeNumber.substringBeforeLast('_')
+                tvEgeNumber.text = variantName
+                tvPractice.visibility = View.GONE
+            } else {
+                tvEgeNumber.text = "Задание ${statistics.egeNumber}"
+                tvPractice.visibility = View.VISIBLE
+                tvPractice.setOnClickListener {
+                    onPracticeClick(statistics.egeNumber)
+                }
+            }
+
             tvAttemptsCount.text = "Попыток: ${statistics.totalAttempts}"
             
             val successRate = statistics.successRate
@@ -70,21 +81,28 @@ class StatisticsAdapter(
             }
             tvLastAttempt.text = lastAttemptDate
             
-            tvPractice.setOnClickListener {
-                onPracticeClick(statistics.egeNumber)
+            if (!statistics.egeNumber.contains("_")) {
+                tvPractice.setOnClickListener {
+                    onPracticeClick(statistics.egeNumber)
+                }
             }
             
-            // Показываем индикатор наличия данных варианта, если они есть
-            if (statistics.variantData != null && statistics.variantData.isNotEmpty()) {
+            val variantData = statistics.variantData
+            if (variantData != null && variantData.isNotEmpty()) {
                 ivVariantData.visibility = View.VISIBLE
                 
-                // Делаем весь элемент кликабельным для просмотра деталей варианта
                 itemView.setOnClickListener {
                     onStatisticsClick(statistics.egeNumber)
                 }
             } else {
                 ivVariantData.visibility = View.GONE
-                itemView.setOnClickListener(null)
+                if (!statistics.egeNumber.contains("_")) {
+                     itemView.setOnClickListener {
+                        onStatisticsClick(statistics.egeNumber)
+                    }
+                } else {
+                    itemView.setOnClickListener(null)
+                }
             }
         }
     }

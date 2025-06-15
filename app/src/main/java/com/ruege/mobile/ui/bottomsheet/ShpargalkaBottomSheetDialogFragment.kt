@@ -145,11 +145,8 @@ class ShpargalkaBottomSheetDialogFragment : BottomSheetDialogFragment() {
             if (isLoading) {
                 pdfView.visibility = View.GONE
                 errorMessageTextView.visibility = View.GONE
-                // Пока идет загрузка, кнопка "Скачать" может быть неактивна или скрыта
                 // downloadButton.visibility = View.GONE 
             } else {
-                // Если загрузка завершилась (успешно или нет), кнопка скачивания должна быть видна
-                // если PDF отображен или есть ошибка (чтобы пользователь мог попробовать скачать)
                 // downloadButton.visibility = View.VISIBLE
             }
         }

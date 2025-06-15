@@ -87,7 +87,7 @@ data class VariantResult(
                     tasks = tasksList,
                     score = score,
                     maxScore = tasksList.size,
-                    completionTime = 0, // Время выполнения неизвестно из JSON
+                    completionTime = 0, 
                     timestamp = timestamp
                 )
             } catch (e: Exception) {

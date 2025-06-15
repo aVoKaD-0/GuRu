@@ -9,7 +9,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "shpargalki_cache")
 data class ShpargalkaEntity(
     @PrimaryKey
-    val id: Int, // Соответствует pdf_id с сервера
+    val id: Int, 
     val title: String,
     val description: String?,
     var isDownloaded: Boolean = false

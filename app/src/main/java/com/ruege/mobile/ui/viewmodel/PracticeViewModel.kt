@@ -44,6 +44,9 @@ class PracticeViewModel @Inject constructor(
     
     val statisticsByType: LiveData<List<PracticeStatisticsEntity>> = 
         practiceRepository.getStatisticsWithAttempts()
+
+    val statisticsByVariant: LiveData<List<PracticeStatisticsEntity>> =
+        practiceRepository.getVariantStatistics()
   
     private val _recentAttemptsWithTask = MutableLiveData<List<PracticeAttemptWithTask>>()
     val recentAttemptsWithTask: LiveData<List<PracticeAttemptWithTask>> 
@@ -201,6 +204,20 @@ class PracticeViewModel @Inject constructor(
         } catch (e: Exception) {
             _error.postValue("Ошибка при получении результатов варианта: ${e.message}")
             null
+        }
+    }
+
+    /**
+     * Сохраняет статистику по варианту
+     * @param statisticsEntity сущность статистики
+     */
+    fun saveVariantStatistics(statisticsEntity: PracticeStatisticsEntity) {
+        viewModelScope.launch {
+            try {
+                practiceStatisticsRepository.saveVariantStatistics(statisticsEntity)
+            } catch (e: Exception) {
+                _error.postValue("Ошибка при сохранении статистики варианта: ${e.message}")
+            }
         }
     }
 
