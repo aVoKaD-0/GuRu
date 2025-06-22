@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Внутренняя память приложения, доступна через context.getFilesDir() -->
+    <files-path name="files" path="." />
+    
+    <!-- Директория кэша приложения, доступна через context.getCacheDir() -->
+    <cache-path name="cache" path="." />
+    
+    <!-- Внешняя память, доступна через Environment.getExternalStorageDirectory() -->
+    <external-path name="external" path="." />
+    
+    <!-- Внешняя память для конкретного приложения, доступна через context.getExternalFilesDir(null) -->
+    <external-files-path name="external_files" path="." />
+    
+    <!-- Внешний кэш приложения, доступен через context.getExternalCacheDir() -->
+    <external-cache-path name="external_cache" path="." />
+    
+    <!-- Директория загрузок -->
+    <external-path name="downloads" path="Download" />
+    
+    <!-- Директория для шпаргалок в приложении -->
+    <files-path name="shpargalki" path="shpargalki/" />
+</paths> 
