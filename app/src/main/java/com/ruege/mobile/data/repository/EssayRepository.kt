@@ -105,17 +105,4 @@ class EssayRepository @Inject constructor(
             }
         }
     }
-
-//    private fun EssaySummaryDto.toContentEntity(): ContentEntity {
-//        return ContentEntity.createForKotlin(
-//            contentId = this.id,
-//            title = this.title,
-//            description = null,
-//            type = "essay",
-//            url = null,
-//            isDownloaded = false,
-//            isFavorite = false,
-//            orderPosition = 0
-//        )
-//    }
 } 

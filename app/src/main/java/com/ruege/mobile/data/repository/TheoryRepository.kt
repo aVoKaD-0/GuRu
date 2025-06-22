@@ -180,17 +180,4 @@ class TheoryRepository @Inject constructor(
             downloadedTheoryDao.getById(contentId)
         }
     }
-    
-//    private fun TheorySummaryDto.toContentEntity(): ContentEntity {
-//        return ContentEntity.createForKotlin(
-//            contentId = this.id,
-//            title = this.title,
-//            description = null,
-//            type = "theory",
-//            url = null,
-//            isDownloaded = false,
-//            isFavorite = false,
-//            orderPosition = this.order
-//        )
-//    }
 } 

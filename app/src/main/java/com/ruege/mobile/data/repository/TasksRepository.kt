@@ -110,17 +110,15 @@ class TasksRepository @Inject constructor(
         val actualCategoryId = categoryId.replace("task_group_", "")
         val page = pageNumberByCategory.getOrDefault(actualCategoryId, 1)
 
-        // Local first strategy
         if (page == 1) {
             val localTasks = taskDao.getTasksByEgeNumberSync(actualCategoryId).map { it.toTaskItem() }
             if(localTasks.isNotEmpty()){
                 tasksCategoryCache[actualCategoryId] = localTasks
-                emit(Result.Success(TasksPage(tasks = localTasks, hasMore = false))) // No pagination for local data
+                emit(Result.Success(TasksPage(tasks = localTasks, hasMore = false)))
                 return@flow
             }
         }
 
-        // Network if no local data
         try {
             emit(Result.Loading)
             val response = taskApiService.getTasksByEgeNumberPaginated(actualCategoryId, limit = pageSize, pageNumber = page)
@@ -205,27 +203,6 @@ class TasksRepository @Inject constructor(
         }
     }
 
-//    suspend fun checkAnswer(taskId: Int, userAnswer: String): AnswerCheckResult {
-//        val task = taskDao.getTaskById(taskId)
-//        val isCorrect = task?.answer.equals(userAnswer, ignoreCase = true)
-//
-//        if (task != null) {
-//            task.isSolved = true
-//            task.score = if(isCorrect) task.maxPoints else 0
-//            task.userAnswer = userAnswer
-//            taskDao.insert(task)
-//        }
-//
-//        return AnswerCheckResult(
-//            taskId = taskId,
-//            isCorrect = isCorrect,
-//            correctAnswer = task?.answer ?: "",
-//            explanation = task?.explanation,
-//            userAnswer = userAnswer,
-//            pointsAwarded = if (isCorrect) task?.maxPoints ?: 0 else 0
-//        )
-//    }
-
     suspend fun updateTaskProgress(taskEntity: TaskEntity) {
         taskDao.insert(taskEntity)
     }
@@ -279,12 +256,11 @@ class TasksRepository @Inject constructor(
             var page = 1
             val allTasks = mutableListOf<TaskDto>()
             while (true) {
-                // We'll use a large limit to fetch as many tasks as possible per request
                 val response = taskApiService.getTasksByEgeNumberPaginated(egeNumber, pageNumber = page, limit = 100)
                 if (response.isSuccessful) {
                     val tasksDto = response.body()?.tasks ?: emptyList()
                     if (tasksDto.isEmpty()) {
-                        break // No more tasks to fetch
+                        break 
                     }
                     allTasks.addAll(tasksDto)
                     page++

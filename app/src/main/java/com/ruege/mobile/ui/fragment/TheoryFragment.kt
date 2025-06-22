@@ -170,7 +170,7 @@ class TheoryFragment : Fragment(), ContentAdapter.OnContentClickListener, Conten
         viewModel.deleteStatus.observe(viewLifecycleOwner) { resource ->
             when (resource) {
                 is Resource.Loading -> {
-                    // Можно показать индикатор загрузки, но пока оставим пустым
+                    
                 }
                 is Resource.Success -> {
                     Toast.makeText(requireContext(), "Теория успешно удалена", Toast.LENGTH_SHORT).show()

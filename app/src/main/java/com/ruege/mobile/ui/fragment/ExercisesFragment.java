@@ -98,7 +98,7 @@ public class ExercisesFragment extends Fragment {
                 }
             } else if (resource instanceof Resource.Error) {
                 progressBar.setVisibility(View.GONE);
-                recyclerView.setVisibility(View.VISIBLE); // or GONE
+                recyclerView.setVisibility(View.VISIBLE); 
                 String error = resource.message;
                 if (error != null && !error.isEmpty()) {
                     Toast.makeText(requireContext(), error, Toast.LENGTH_LONG).show();

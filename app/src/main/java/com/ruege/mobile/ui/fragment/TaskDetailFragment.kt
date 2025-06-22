@@ -43,12 +43,6 @@ class TaskDetailFragment : Fragment() {
         
         if (taskId > 0) {
             messageView.text = "Загрузка задания с ID: $taskId...\nЭта функциональность находится в разработке."
-            
-            // val taskFragment = TaskFragment.newInstance(taskId.toString())
-            // parentFragmentManager.beginTransaction()
-            //     .replace(R.id.fragment_container, taskFragment)
-            //     .addToBackStack(null)
-            //     .commit()
         } else {
             messageView.text = "Ошибка: ID задания не указан или некорректен."
             Toast.makeText(requireContext(), "Ошибка: не удалось загрузить задание", Toast.LENGTH_SHORT).show()

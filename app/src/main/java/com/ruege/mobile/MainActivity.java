@@ -232,7 +232,6 @@ public class MainActivity extends AppCompatActivity {
             userViewModel.getCurrentUser().observe(this, user -> {
                 if (user != null) {
                     Timber.d("LOG_CHAIN: MainActivity.onCreate - Пользователь авторизован.");
-                    // contentViewModel.syncInitialContent(); // Этот вызов теперь в init ContentViewModel
                 } else {
                     Timber.d("LOG_CHAIN: MainActivity.onCreate - Пользователь не авторизован. Синхронизация контента не запускается.");
                 }

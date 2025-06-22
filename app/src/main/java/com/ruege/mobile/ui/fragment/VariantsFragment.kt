@@ -118,7 +118,6 @@ class VariantsFragment : Fragment(), VariantAdapter.OnVariantClickListener, Vari
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isDownloading.collectLatest { isDownloading ->
                 binding.fabDownloadVariants.isEnabled = !isDownloading
-//                binding.progressBarDownloadVariants.visibility = if (isDownloading) View.VISIBLE else View.GONE
             }
         }
 

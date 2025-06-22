@@ -29,7 +29,6 @@ class TasksViewModel @Inject constructor(
     private val practiceStatisticsRepository: PracticeStatisticsRepository
 ) : ViewModel() {
 
-    // For TasksFragment
     private val _taskItemsState = MutableLiveData<Resource<List<ContentItem>>>()
     val taskItemsState: LiveData<Resource<List<ContentItem>>> = _taskItemsState
 
@@ -42,7 +41,6 @@ class TasksViewModel @Inject constructor(
     private val _deleteTaskGroupStatus = MutableLiveData<Resource<Unit>>()
     val deleteTaskGroupStatus: LiveData<Resource<Unit>> = _deleteTaskGroupStatus
 
-    // For TaskDisplayBottomSheetDialogFragment
     private val _tasks = MutableLiveData<List<TaskItem>?>()
     val tasks: LiveData<List<TaskItem>?> = _tasks
 
@@ -72,7 +70,6 @@ class TasksViewModel @Inject constructor(
 
     private val hasMoreTasksByCategory = mutableMapOf<String, Boolean>()
 
-    // For TaskFragment
     private val _taskContent = MutableLiveData<TaskItem?>()
     val taskContent: LiveData<TaskItem?> = _taskContent
 
@@ -288,7 +285,6 @@ class TasksViewModel @Inject constructor(
                             _tasks.postValue(currentTasks + enrichedNewTasks)
                             hasMoreTasksByCategory[egeNumber] = page.hasMore
                         } else {
-                            // Если новых задач нет, значит, это конец списка
                             hasMoreTasksByCategory[egeNumber] = false
                         }
                     }

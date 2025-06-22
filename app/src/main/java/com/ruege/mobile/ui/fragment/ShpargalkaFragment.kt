@@ -117,7 +117,7 @@ class ShpargalkaFragment : Fragment(), ContentAdapter.OnContentClickListener, Co
     }
 
     override fun onItemSelectionChanged(item: ContentItem, isSelected: Boolean) {
-        // Пока не используется для шпаргалок
+        
     }
 
     override fun onDestroyView() {

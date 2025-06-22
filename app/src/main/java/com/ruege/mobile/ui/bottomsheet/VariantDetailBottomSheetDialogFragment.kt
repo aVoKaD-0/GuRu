@@ -360,7 +360,6 @@ class VariantDetailBottomSheetDialogFragment : BottomSheetDialogFragment() {
 
                 currentVariantId?.let { variantId ->
                     Log.d(TAG_VARIANT_DETAIL_BS, "Variant $variantId is checked. Preparing for sync or cleanup.")
-                    // variantViewModel.clearAnswersForCompletedVariant(variantId)
                 }
 
                 timeRemainingInMillis = TIMER_DURATION_MS

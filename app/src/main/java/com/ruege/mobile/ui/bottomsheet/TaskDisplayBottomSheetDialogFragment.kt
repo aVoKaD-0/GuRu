@@ -652,11 +652,10 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
             val scrollView = v as? HorizontalScrollView ?: return@setOnScrollChangeListener
             val childView = scrollView.getChildAt(0)
             if (childView != null) {
-                // Проверяем, что достигли конца прокрутки
                 val diff = (childView.right - (scrollView.width + scrollX))
                 if (diff == 0 && !isCurrentlyLoadingMoreLocal) {
                     Log.d(TAG_TASK_BS, "Достигнут конец прокрутки навигатора. Запускаем загрузку.")
-                    isCurrentlyLoadingMoreLocal = true // Блокируем немедленно
+                    isCurrentlyLoadingMoreLocal = true 
                     loadMoreTasks()
                 }
             }
@@ -670,7 +669,7 @@ class TaskDisplayBottomSheetDialogFragment : BottomSheetDialogFragment() {
                 viewModel.loadMoreTasksByCategory(egeNum)
             } else {
                 Log.d(TAG_TASK_BS, "Больше нет заданий для загрузки для $egeNum")
-                isCurrentlyLoadingMoreLocal = false // Разблокируем, если больше нечего грузить
+                isCurrentlyLoadingMoreLocal = false 
             }
         }
     }
