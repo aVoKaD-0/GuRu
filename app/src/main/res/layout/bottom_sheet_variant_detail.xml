@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Общий индикатор загрузки, виден при первой загрузке деталей варианта -->
+    <ProgressBar
+        android:id="@+id/pb_variant_detail_loading"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        tools:visibility="visible"/>
+
+    <!-- Контейнер для первоначальной инструкции -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/sv_instructions_area"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:visibility="visible">
+
+        <LinearLayout
+            android:id="@+id/ll_instructions_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tv_instruction_title_main"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Единый государственный экзамен по РУССКОМУ ЯЗЫКУ"
+                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:gravity="center_horizontal"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/tv_instruction_title_sub"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Инструкция по выполнению работы"
+                android:textAppearance="?attr/textAppearanceSubtitle1"
+                android:gravity="center_horizontal"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tv_instruction_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceBody2"
+                android:lineSpacingMultiplier="1.2"
+                android:text="@string/variant_execution_instruction"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/tv_instruction_wish"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Желаем успеха!"
+                android:textAppearance="?attr/textAppearanceSubtitle1"
+                android:textStyle="bold"
+                android:gravity="center_horizontal"
+                android:layout_marginBottom="24dp"/>
+
+            <Button
+                android:id="@+id/btn_acknowledge_instructions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Я прочитал(а) и готов(а) начать" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Контейнер для решения варианта -->
+    <FrameLayout
+        android:id="@+id/nsv_variant_solving_area"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <View
+            android:id="@+id/drag_handle_view"
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/drag_handle" />
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/nsv_tasks_scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="?attr/actionBarSize">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:id="@+id/tv_variant_name_bs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textAppearance="?attr/textAppearanceHeadline5"
+                    android:layout_marginBottom="8dp"
+                    tools:text="Досрочный вариант ЕГЭ 2025" />
+
+                <TextView
+                    android:id="@+id/tv_variant_description_bs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textAppearance="?attr/textAppearanceBody2"
+                    android:layout_marginBottom="16dp"
+                    tools:text="тренировочный" />
+
+                <LinearLayout
+                    android:id="@+id/ll_dynamic_content_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:gravity="end|center_vertical"
+            android:padding="8dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_timer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:layout_marginEnd="8dp"
+                tools:text="03:55:00" />
+            
+            <ImageButton
+                android:id="@+id/btn_timer_pause_resume"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_media_pause"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:scaleType="fitCenter"
+                android:contentDescription="Пауза или возобновление таймера"
+                app:tint="?attr/colorOnSurface"
+                />
+
+        </LinearLayout>
+
+
+        <Button
+            android:id="@+id/btn_finish_variant"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_margin="16dp"
+            android:text="Завершить вариант" />
+
+    </FrameLayout>
+</FrameLayout> 

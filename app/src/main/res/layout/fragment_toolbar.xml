@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.appbar.MaterialToolbar xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/toolbar"
+    android:layout_width="match_parent"
+    android:layout_height="?attr/actionBarSize"
+    android:background="?attr/colorSurface"
+    app:elevation="0dp"
+    app:title="">
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/theme_toggle"
+        android:layout_width="@dimen/icon_size_xlarge"
+        android:layout_height="@dimen/icon_size_xlarge"
+        android:layout_gravity="start|center_vertical"
+        android:contentDescription="Переключить тему приложения"
+        app:icon="@drawable/ic_lantern_off"
+        app:iconSize="@dimen/icon_size_large"
+        app:iconGravity="textStart"
+        app:iconPadding="0dp"
+        app:iconTint="@null"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
+        app:backgroundTint="@android:color/transparent"
+        app:shapeAppearanceOverlay="@style/ShapeAppearance.Material3.Corner.Full"
+        style="@style/Widget.Material3.Button.IconButton"/>
+
+    <ImageView
+        android:id="@+id/user_avatar"
+        android:layout_width="@dimen/icon_size_xlarge"
+        android:layout_height="@dimen/icon_size_xlarge"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="@dimen/spacing_medium"
+        android:background="@drawable/circle_background"
+        android:contentDescription="Профиль пользователя"
+        android:src="@drawable/ic_profile"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless"
+        android:padding="@dimen/spacing_tiny" />
+
+</com.google.android.material.appbar.MaterialToolbar> 
