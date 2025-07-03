@@ -1,0 +1,59 @@
+<resources>
+    <string name="app_name">GuRu</string>
+    <string name="welcome_title">Подготовка к ЕГЭ по русскому языку</string>
+    <string name="get_started">Начать</string>
+    <string name="theory">Теория</string>
+    <string name="exercises">Задания</string>
+    <string name="tests">Тесты</string>
+    <string name="favorites">Избранное</string>
+    <string name="profile">Профиль</string>
+    <string name="title_activity_detail">Детали</string>
+    <string name="error_loading_data">Ошибка загрузки.\nПроверьте интернет.</string>
+    <string name="app_logo">Логотип приложения</string>
+    <string name="login_description">Подготовка к ЕГЭ по русскому языку</string>
+    <string name="login_with_google">Войти через Google</string>
+    <string name="login_failed">Ошибка входа</string>
+    <string name="login_success">Вход выполнен успешно</string>
+    <string name="default_web_client_id" translatable="false">1059555782542-cvqu4orpe73j9bjcjmgd43e1qeeu25cb.apps.googleusercontent.com</string>
+    
+    <!-- Строки для заданий -->
+    <string name="your_answer">Ваш ответ</string>
+    <string name="enter_text_answer">Введите текстовый ответ</string>
+    <string name="enter_number_answer">Введите числовой ответ</string>
+    <string name="submit_answer">Отправить ответ</string>
+    <string name="select_answer">Выберите вариант ответа</string>
+    <string name="enter_answer">Введите ответ</string>
+    <string name="correct_answer">Правильно!</string>
+    <string name="incorrect_answer">Неправильно</string>
+    <string name="explanation">Объяснение</string>
+    <string name="next_task">Следующее задание</string>
+
+    <string name="practice_statistics">Статистика практики</string>
+    <string name="task_detail">Детали задания</string>
+    <string name="overall_statistics">Общая статистика</string>
+    <string name="total_attempts">Всего попыток:</string>
+    <string name="correct_attempts">Правильных ответов:</string>
+    <string name="success_rate">Успешность:</string>
+    <string name="empty_statistics">У вас пока нет статистики.\nРешите несколько заданий, чтобы увидеть результаты.</string>
+    <string name="empty_attempts">У вас пока нет попыток решения заданий.\nРешите несколько заданий, чтобы увидеть историю.</string>
+    <string name="by_ege_numbers">По номерам</string>
+    <string name="recent_attempts">Последние попытки</string>
+    <string name="attempts_count">Попыток: %d</string>
+    <string name="success_rate_percent">Успешность: %.1f%%</string>
+    <string name="last_attempt">Последняя попытка: %s</string>
+    <string name="practice">Практиковать</string>
+    <string name="try_again">Попробовать снова</string>
+    <string name="correct">Верно</string>
+    <string name="incorrect">Неверно</string>
+
+    <string name="variant_execution_instruction">
+Экзаменационная работа состоит из двух частей, содержащих 27 заданий. Часть 1 содержит 26 заданий, часть 2 содержит 1 задание.\n\n
+На выполнение экзаменационной работы по русскому языку отводится 3 часа 55 минут (235 минут).\n\n
+Ответами к заданиям 1–26 являются цифра (число), или слово (несколько слов), или последовательность цифр (чисел). Ответ запишите в поле ответа в тексте работы, а затем перенесите по приведённым ниже образцам в бланк ответов № 1.\n\n
+Задание 27 части 2 представляет собой сочинение по прочитанному тексту. Это задание выполняется на бланке ответов № 2.\n\n
+Все бланки ЕГЭ заполняются яркими чёрными чернилами. Допускается использование гелевой или капиллярной ручки.\n\n
+При выполнении заданий можно пользоваться черновиком. Записи в черновике, а также в тексте контрольных измерительных материалов не учитываются при оценивании работы.\n\n
+Баллы, полученные Вами за выполненные задания, суммируются. Постарайтесь выполнить как можно больше заданий и набрать наибольшее количество баллов.\n\n
+После завершения работы проверьте, чтобы ответ на каждое задание в бланках ответов № 1 и № 2 был записан под правильным номером.
+    </string>
+</resources>

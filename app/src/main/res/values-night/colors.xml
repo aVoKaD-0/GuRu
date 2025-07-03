@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B3FFFFFF</color>
+    
+    
+    <color name="background_light">#121212</color>
+
+    <!-- Для совместимости с fragment_practice_statistics.xml -->
+    <color name="colorPrimary">@color/primary_light</color>
+    <color name="background">#121212</color>
+
+    <color name="tab_text_selected">@color/white</color>
+    <color name="tab_text_unselected">#757575</color>
+    <color name="tab_background">@color/black</color>
+
+    <color name="placeholder_background">#DDDDDD</color>
+
+    <color name="placeholder_bg">#3A3A3A</color>
+
+    <!-- Цвета для результатов проверки (темная тема) -->
+    <color name="correct_answer_green">#66BB6A</color>
+    <color name="incorrect_answer_red">#EF5350</color>
+    <color name="show_answer_link_color">@color/secondary</color>
+
+    <color name="divider_dark">#1FFFFFFF</color> 
+</resources> 

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24.0"
+    android:viewportHeight="24.0">
+
+    <!-- Контур мусорной корзины -->
+    <path
+        android:strokeColor="#FF0000"
+        android:strokeWidth="1.5"
+        android:pathData="
+            M10,3 L14,3
+            M5,5 L19,5
+            M7,7 L9,21
+            L15,21
+            L17,7
+            Z" />
+
+    <!-- Красный крест в центре -->
+    <path
+        android:strokeColor="#FF0000"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="
+            M10,12 L14,16
+            M14,12 L10,16" />
+
+</vector>

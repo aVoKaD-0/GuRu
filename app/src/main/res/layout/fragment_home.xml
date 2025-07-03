@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".ui.fragment.HomeFragment">
+
+    <!-- Прокручиваемый контент (только верхняя часть) -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll_content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Шиммер для прогресса -->
+            <com.facebook.shimmer.ShimmerFrameLayout
+                android:id="@+id/shimmer_progress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_small"
+                app:shimmer_auto_start="false">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/spacing_tiny"
+                    android:paddingEnd="@dimen/spacing_tiny">
+                    <include layout="@layout/item_progress_placeholder" />
+                </LinearLayout>
+            </com.facebook.shimmer.ShimmerFrameLayout>
+
+            <!-- RecyclerView для прогресса -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_progress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToPadding="false"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/spacing_tiny"
+                android:paddingEnd="@dimen/spacing_tiny"
+                android:visibility="gone"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+            <!-- Плейсхолдер ошибки для прогресса -->
+            <LinearLayout
+                android:id="@+id/error_placeholder_progress"
+                android:layout_width="match_parent"
+                android:layout_height="92dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="@dimen/spacing_small"
+                android:layout_marginStart="@dimen/spacing_medium"
+                android:layout_marginEnd="@dimen/spacing_medium"
+                android:padding="@dimen/spacing_medium"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="@dimen/icon_size_medium"
+                    android:layout_height="@dimen/icon_size_medium"
+                    android:src="@drawable/ic_sentiment_dissatisfied"
+                    android:contentDescription="Грустный смайлик"
+                    app:tint="?android:attr/textColorSecondary"
+                    android:layout_marginEnd="@dimen/spacing_small"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Проверьте подключение к интернету и\nсовершите попытку позже."
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="@dimen/text_size_body"
+                    android:gravity="center_horizontal"/>
+            </LinearLayout>
+
+            <!-- Шиммер для новостей -->
+            <com.facebook.shimmer.ShimmerFrameLayout
+                android:id="@+id/shimmer_news"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_medium"
+                app:shimmer_auto_start="false">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/spacing_tiny"
+                    android:paddingEnd="@dimen/spacing_tiny">
+                    <include layout="@layout/item_news_placeholder" />
+                </LinearLayout>
+            </com.facebook.shimmer.ShimmerFrameLayout>
+
+            <!-- RecyclerView для новостей -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_news"
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                android:layout_marginTop="@dimen/spacing_medium"
+                android:clipToPadding="false"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/spacing_tiny"
+                android:paddingEnd="@dimen/spacing_tiny"
+                android:visibility="gone"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+            <!-- Плейсхолдер ошибки для новостей -->
+            <LinearLayout
+                android:id="@+id/error_placeholder_news"
+                android:layout_width="match_parent"
+                android:layout_height="100dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="@dimen/spacing_medium"
+                android:layout_marginStart="@dimen/spacing_medium"
+                android:layout_marginEnd="@dimen/spacing_medium"
+                android:padding="@dimen/spacing_medium"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="@dimen/icon_size_medium"
+                    android:layout_height="@dimen/icon_size_medium"
+                    android:src="@drawable/ic_sentiment_dissatisfied"
+                    android:contentDescription="Грустный смайлик"
+                    app:tint="?android:attr/textColorSecondary"
+                    android:layout_marginEnd="@dimen/spacing_small"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Проверьте подключение к интернету и\nсовершите попытку позже."
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:textSize="@dimen/text_size_body"
+                    android:gravity="center_horizontal"/>
+            </LinearLayout>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Навигация по разделам (вкладки) -->
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tab_navigation"
+        style="@style/CustomTabLayout"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginTop="@dimen/spacing_medium"
+        android:contentDescription="Навигация по разделам приложения"
+        android:elevation="5dp"
+        app:tabMode="scrollable" />
+
+    <!-- ViewPager для отображения фрагментов -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/view_pager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout> 
